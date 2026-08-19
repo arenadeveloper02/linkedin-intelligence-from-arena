@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Award, Building2, MessageSquare, ThumbsUp, UserCheck, Users } from 'lucide-react';
 import type { CompanyAggregate, DashboardData, DistributionItem } from '@/lib/types';
 import { buildDistribution, formatNumber, initialsOf } from '@/lib/utils';
@@ -13,6 +13,8 @@ interface OverviewTabProps {
 }
 
 export default function OverviewTab({ data, companies, onSelectCompany }: OverviewTabProps) {
+  const [taglineExpanded, setTaglineExpanded] = useState(false);
+
   const stats = useMemo(() => {
     const totalFromPeople = data.people.reduce((sum, p) => sum + p.engagementCount, 0);
     const totalEngagements = totalFromPeople > 0 ? totalFromPeople : data.engagements.length;
@@ -50,7 +52,7 @@ export default function OverviewTab({ data, companies, onSelectCompany }: Overvi
   return (
     <div className="space-y-6">
       {data.company && (
-        <div className="flex flex-col gap-4 rounded-xl border border-grey-200 bg-white p-5 shadow-ds-sm sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-4 rounded-xl border border-grey-200 bg-white p-5 shadow-ds-sm sm:flex-row sm:items-start">
           {data.company.logoUrl ? (
             <img src={data.company.logoUrl} alt={data.company.name} className="h-14 w-14 rounded-lg object-cover" />
           ) : (
@@ -60,7 +62,22 @@ export default function OverviewTab({ data, companies, onSelectCompany }: Overvi
           )}
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold text-grey-900">{data.company.name || 'Company'}</h2>
-            {data.company.tagline && <p className="mt-0.5 line-clamp-2 text-sm text-grey-600">{data.company.tagline}</p>}
+            {data.company.tagline && (
+              <div className="mt-0.5">
+                <p className={`text-sm text-grey-600 ${taglineExpanded ? 'whitespace-pre-line' : 'line-clamp-2'}`}>
+                  {data.company.tagline}
+                </p>
+                {data.company.tagline.length > 140 && (
+                  <button
+                    type="button"
+                    onClick={() => setTaglineExpanded((prev) => !prev)}
+                    className="mt-1 text-xs font-medium text-brand-600 transition duration-200 hover:text-brand-700"
+                  >
+                    {taglineExpanded ? 'View less' : 'View more'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex shrink-0 flex-wrap gap-4 text-xs text-grey-600">
             {data.company.industry && (

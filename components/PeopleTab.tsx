@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, MapPin, Search } from 'lucide-react';
 import type { Person, SeniorityLevel } from '@/lib/types';
 import { formatNumber, initialsOf } from '@/lib/utils';
-import { CompanyBadge, SeniorityBadge } from '@/components/Widgets';
+import { CompanyBadge, DecisionMakerBadge, SeniorityBadge } from '@/components/Widgets';
 
 interface PeopleTabProps {
   people: Person[];
@@ -41,9 +41,7 @@ function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <SeniorityBadge level={person.seniority} />
         <CompanyBadge isInternal={person.isInternal} />
-        {person.isDecisionMaker && (
-          <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-medium text-white">Decision Maker</span>
-        )}
+        {person.isDecisionMaker && <DecisionMakerBadge />}
         {person.companyName && (
           <span className="max-w-[160px] truncate rounded-full border border-grey-200 px-2 py-0.5 text-[11px] font-medium text-grey-600">
             {person.companyName}

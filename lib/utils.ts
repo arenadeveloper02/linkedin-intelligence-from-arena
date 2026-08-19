@@ -32,6 +32,18 @@ export function displayNameFromEmail(email: string): string {
   return pretty || email;
 }
 
+export function resolvePostUrl(postUrl: string, shareUrl: string, postKey: string): string {
+  for (const candidate of [postUrl, shareUrl]) {
+    const value = (candidate || '').trim();
+    if (/^https?:\/\//i.test(value) && value.toLowerCase().includes('linkedin.com')) return value;
+  }
+  const key = (postKey || '').trim();
+  if (/^\d{8,}$/.test(key)) {
+    return `https://www.linkedin.com/feed/update/urn:li:activity:${key}/`;
+  }
+  return '';
+}
+
 export function classifySeniority(raw: string, title: string, headline: string): SeniorityLevel {
   const r = raw.trim().toLowerCase();
   if (r) {

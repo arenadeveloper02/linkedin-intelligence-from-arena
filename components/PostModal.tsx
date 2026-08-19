@@ -2,7 +2,7 @@
 
 import { ExternalLink, MessageSquare, Repeat2, ThumbsUp, X } from 'lucide-react';
 import type { Person, PostItem } from '@/lib/types';
-import { formatDate, formatNumber, initialsOf } from '@/lib/utils';
+import { formatDate, formatNumber, initialsOf, resolvePostUrl } from '@/lib/utils';
 import { ReactionBadge, SeniorityBadge } from '@/components/Widgets';
 
 interface PostModalProps {
@@ -14,6 +14,8 @@ interface PostModalProps {
 export default function PostModal({ post, engagers, onClose }: PostModalProps) {
   const reactionFor = (person: Person): string =>
     person.interactions.find((i) => i.postKey === post.activityKey)?.reactionType ?? 'LIKE';
+
+  const shareUrl = resolvePostUrl(post.shareUrl, '', post.activityKey);
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
@@ -45,9 +47,9 @@ export default function PostModal({ post, engagers, onClose }: PostModalProps) {
               <Repeat2 className="h-3 w-3" />
               {formatNumber(post.repostCounter)} reposts
             </span>
-            {post.shareUrl && (
+            {shareUrl && (
               <a
-                href={post.shareUrl}
+                href={shareUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="ml-auto flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"

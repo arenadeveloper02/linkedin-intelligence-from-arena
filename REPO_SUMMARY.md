@@ -1,20 +1,22 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-19T13:59:41.112Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-19T14:29:52.245Z.
 
 ## Overview
 
-LinkedIn Intelligence — engagement analytics dashboard for LinkedIn company activity.
+LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company activity.
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 37
 
 ## Features
 
-- Overview, People, Companies, and Posts tabs
-- Person, Company, and Post detail drawers/modals
-- Refresh action to re-fetch intelligence data
-- Arena email gating via query parameter and cookie
+- Company description with View more / View less toggle
+- Robust workflow-response parsing with header-aware column mapping (fixes locations, followers, connections, countries, degrees)
+- Working 'Hide internal employees' filter based on target-company match
+- De-duplicated people records merged by LinkedIn profile
+- Distinct Decision Maker badge color
+- Safe LinkedIn post links (never relative app URLs)
 
 ## Tech Stack
 
@@ -136,5 +138,6 @@ LinkedIn Intelligence — engagement analytics dashboard for LinkedIn company ac
 
 ## Latest Change
 
-- **Updated at:** 2026-08-19T13:59:41.112Z
-- **Request:** remove the current profile(Identity derived from the email URL parameter.) section next to the refresh button
+- **Updated at:** 2026-08-19T14:29:52.245Z
+- **Request:** thing to fix:
+1. The description of the company is elipsed if its huge, add a view (more, less) 2. In the overview tab, top location section is empty, pls check that 3. in the people tab remove Hide internal employees functionlity is not working, lets say if the person belongs to the same company hide the person 4. peoples card locations are missing of the persons 5. People tab for Decision makers: change the badge color  6. People’s tab, view post link should point to the actual LinkedIn post not the https://linkedin-intelligence-from-arena.vercel.app/Employee 7. peoples tab: Person details Followers & Connections & location are empty 8. the filter, people search is giving me the duplicate data is should fix, filters dropdowns like all countries, cities, degree are empty.

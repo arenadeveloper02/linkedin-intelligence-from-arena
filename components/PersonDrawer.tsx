@@ -2,8 +2,8 @@
 
 import { ExternalLink, MapPin, Users, X } from 'lucide-react';
 import type { Person, PostItem } from '@/lib/types';
-import { formatDate, formatNumber, initialsOf } from '@/lib/utils';
-import { CompanyBadge, ReactionBadge, SeniorityBadge } from '@/components/Widgets';
+import { formatDate, formatNumber, initialsOf, resolvePostUrl } from '@/lib/utils';
+import { CompanyBadge, DecisionMakerBadge, ReactionBadge, SeniorityBadge } from '@/components/Widgets';
 
 interface PersonDrawerProps {
   person: Person;
@@ -40,11 +40,7 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <SeniorityBadge level={person.seniority} />
                 <CompanyBadge isInternal={person.isInternal} />
-                {person.isDecisionMaker && (
-                  <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-medium text-white">
-                    Decision Maker
-                  </span>
-                )}
+                {person.isDecisionMaker && <DecisionMakerBadge />}
               </div>
             </div>
           </div>
@@ -124,7 +120,7 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
             <ul className="mt-3 space-y-3">
               {person.interactions.map((interaction, index) => {
                 const post = findPost(interaction.postKey);
-                const url = interaction.postUrl || post?.shareUrl || '';
+                const url = resolvePostUrl(interaction.postUrl, post?.shareUrl ?? '', interaction.postKey);
                 return (
                   <li key={`${interaction.postKey}-${index}`} className="rounded-lg border border-grey-200 p-3">
                     <div className="flex items-center justify-between">
