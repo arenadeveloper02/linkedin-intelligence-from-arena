@@ -1,20 +1,20 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-19T12:25:52.768Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-19T13:59:41.112Z.
 
 ## Overview
 
-LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company activity. This edit removes the hard emailId gate: visitors without an emailId query parameter are no longer rewritten to the access-denied page; the email is now optional and read from search parameters or cookie when present.
+LinkedIn Intelligence — engagement analytics dashboard for LinkedIn company activity.
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 37
 
 ## Features
 
-- Engagement intelligence dashboard (overview, people, companies, posts)
-- Optional emailId capture from search parameters (no longer blocks access)
-- Cross-origin iframe support with frame-ancestors * headers
-- Prisma + Neon Postgres fetch logging
+- Overview, People, Companies, and Posts tabs
+- Person, Company, and Post detail drawers/modals
+- Refresh action to re-fetch intelligence data
+- Arena email gating via query parameter and cookie
 
 ## Tech Stack
 
@@ -136,5 +136,5 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 
 ## Latest Change
 
-- **Updated at:** 2026-08-19T12:25:52.768Z
-- **Request:** remove the email restriction that should take from the search parameters
+- **Updated at:** 2026-08-19T13:59:41.112Z
+- **Request:** remove the current profile(Identity derived from the email URL parameter.) section next to the refresh button
