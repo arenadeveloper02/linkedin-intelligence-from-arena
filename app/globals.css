@@ -1,0 +1,11 @@
+@import './arena-ds-tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-grey-50 text-grey-900 antialiased;
+  }
+}

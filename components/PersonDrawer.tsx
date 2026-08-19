@@ -1,0 +1,159 @@
+"use client"
+
+import { ExternalLink, MapPin, Users, X } from 'lucide-react';
+import type { Person, PostItem } from '@/lib/types';
+import { formatDate, formatNumber, initialsOf } from '@/lib/utils';
+import { CompanyBadge, ReactionBadge, SeniorityBadge } from '@/components/Widgets';
+
+interface PersonDrawerProps {
+  person: Person;
+  posts: PostItem[];
+  onClose: () => void;
+}
+
+export default function PersonDrawer({ person, posts, onClose }: PersonDrawerProps) {
+  const findPost = (postKey: string): PostItem | null =>
+    posts.find((p) => p.activityKey === postKey) ?? null;
+
+  return (
+    <div className="fixed inset-0 z-40">
+      <div className="absolute inset-0 bg-grey-900/70" onClick={onClose} aria-hidden="true" />
+      <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-ds-xl">
+        <header className="flex items-start justify-between border-b border-grey-200 p-5">
+          <h2 className="text-sm font-semibold text-grey-500">Person details</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-grey-500 hover:bg-grey-100">
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+        <div className="p-5">
+          <div className="flex items-start gap-4">
+            {person.avatarUrl ? (
+              <img src={person.avatarUrl} alt={person.fullName} className="h-16 w-16 rounded-full object-cover" />
+            ) : (
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-50 text-lg font-semibold text-brand-700">
+                {initialsOf(person.fullName)}
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold text-grey-900">{person.fullName || 'Unknown person'}</h3>
+              <p className="mt-0.5 text-sm text-grey-600">{person.headline || person.title || '—'}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <SeniorityBadge level={person.seniority} />
+                <CompanyBadge isInternal={person.isInternal} />
+                {person.isDecisionMaker && (
+                  <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-medium text-white">
+                    Decision Maker
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {person.linkedinUrl && (
+            <a
+              href={person.linkedinUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-brand-700"
+            >
+              Open LinkedIn profile
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-lg border border-grey-200 p-3">
+              <p className="flex items-center gap-1 text-[11px] text-grey-500">
+                <Users className="h-3.5 w-3.5" /> Followers
+              </p>
+              <p className="mt-1 text-lg font-semibold text-grey-900">
+                {person.followersCount > 0 ? formatNumber(person.followersCount) : '—'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-grey-200 p-3">
+              <p className="flex items-center gap-1 text-[11px] text-grey-500">
+                <Users className="h-3.5 w-3.5" /> Connections
+              </p>
+              <p className="mt-1 text-lg font-semibold text-grey-900">
+                {person.connectionsCount > 0 ? formatNumber(person.connectionsCount) : '—'}
+              </p>
+            </div>
+          </div>
+
+          <dl className="mt-5 space-y-2 text-sm">
+            {person.companyName && (
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-grey-500">Company</dt>
+                <dd className="truncate font-medium text-grey-900">
+                  {person.companyUrl ? (
+                    <a href={person.companyUrl} target="_blank" rel="noreferrer" className="text-brand-600 hover:text-brand-700">
+                      {person.companyName}
+                    </a>
+                  ) : (
+                    person.companyName
+                  )}
+                </dd>
+              </div>
+            )}
+            {person.targetCompany && (
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-grey-500">Target company</dt>
+                <dd className="truncate font-medium text-grey-900">{person.targetCompany}</dd>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              <dt className="flex items-center gap-1 text-grey-500">
+                <MapPin className="h-3.5 w-3.5" /> Location
+              </dt>
+              <dd className="truncate font-medium text-grey-900">{person.location || person.country || '—'}</dd>
+            </div>
+            {person.connectionDegree && (
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-grey-500">Connection degree</dt>
+                <dd className="font-medium text-grey-900">{person.connectionDegree}</dd>
+              </div>
+            )}
+          </dl>
+
+          <h4 className="mt-6 text-sm font-semibold text-grey-900">
+            Post interaction history ({person.interactions.length})
+          </h4>
+          {person.interactions.length === 0 ? (
+            <p className="mt-2 text-xs text-grey-500">No recorded interactions for this person.</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {person.interactions.map((interaction, index) => {
+                const post = findPost(interaction.postKey);
+                const url = interaction.postUrl || post?.shareUrl || '';
+                return (
+                  <li key={`${interaction.postKey}-${index}`} className="rounded-lg border border-grey-200 p-3">
+                    <div className="flex items-center justify-between">
+                      <ReactionBadge type={interaction.reactionType} />
+                      {post && post.parsedDatetime && (
+                        <span className="text-[11px] text-grey-500">{formatDate(post.parsedDatetime)}</span>
+                      )}
+                    </div>
+                    <p className="mt-2 line-clamp-3 text-xs text-grey-600">
+                      {interaction.postSnippet || post?.text || 'Post content unavailable.'}
+                    </p>
+                    {url && (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                      >
+                        View post
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
