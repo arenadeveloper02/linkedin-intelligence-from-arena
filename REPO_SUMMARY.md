@@ -1,21 +1,20 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-19T12:17:42.310Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-19T12:25:52.768Z.
 
 ## Overview
 
-LinkedIn Intelligence — engagement analytics dashboard with Arena DS-consistent CTAs (brand blue, MD component scale, unified hover/pressed/focus states).
+LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company activity. This edit removes the hard emailId gate: visitors without an emailId query parameter are no longer rewritten to the access-denied page; the email is now optional and read from search parameters or cookie when present.
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 37
 
 ## Features
 
-- Unified primary CTA style across dashboard (brand-600, hover brand-700, pressed brand-800, 40px height, 12px radius, focus ring)
-- Consistent secondary CTA style for Refresh and menu triggers
-- Overview, People, Companies, and Posts intelligence tabs
-- Person, Company, and Post detail drawers/modals
-- Arena email gate with access-denied handling
+- Engagement intelligence dashboard (overview, people, companies, posts)
+- Optional emailId capture from search parameters (no longer blocks access)
+- Cross-origin iframe support with frame-ancestors * headers
+- Prisma + Neon Postgres fetch logging
 
 ## Tech Stack
 
@@ -137,5 +136,5 @@ LinkedIn Intelligence — engagement analytics dashboard with Arena DS-consisten
 
 ## Latest Change
 
-- **Updated at:** 2026-08-19T12:17:42.310Z
-- **Request:** Make the UI accordingly cta should match
+- **Updated at:** 2026-08-19T12:25:52.768Z
+- **Request:** remove the email restriction that should take from the search parameters
