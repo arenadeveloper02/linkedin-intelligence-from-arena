@@ -106,7 +106,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
-              className={`border-b-2 px-4 py-3 text-sm font-medium transition ${
+              className={`border-b-2 px-4 py-3 text-sm font-medium transition duration-200 ${
                 tab === t.key ? 'border-brand-600 text-brand-600' : 'border-transparent text-grey-600 hover:text-grey-900'
               }`}
             >
@@ -125,7 +125,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
             <button
               type="button"
               onClick={() => void fetchData()}
-              className="mt-4 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+              className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-brand-600 px-4 text-sm font-medium text-white transition duration-200 hover:bg-brand-700 active:bg-brand-800 focus:outline-none focus:ring-4 focus:ring-brand-600/30"
             >
               Try again
             </button>

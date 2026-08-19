@@ -21,7 +21,7 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-ds-xl">
         <header className="flex items-start justify-between border-b border-grey-200 p-5">
           <h2 className="text-sm font-semibold text-grey-500">Person details</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-grey-500 hover:bg-grey-100">
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-grey-500 transition duration-200 hover:bg-grey-100">
             <X className="h-5 w-5" />
           </button>
         </header>
@@ -54,7 +54,7 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
               href={person.linkedinUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-brand-700"
+              className="mt-4 inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white transition duration-200 hover:bg-brand-700 active:bg-brand-800 focus:outline-none focus:ring-4 focus:ring-brand-600/30"
             >
               Open LinkedIn profile
               <ExternalLink className="h-3.5 w-3.5" />
@@ -86,7 +86,7 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
                 <dt className="text-grey-500">Company</dt>
                 <dd className="truncate font-medium text-grey-900">
                   {person.companyUrl ? (
-                    <a href={person.companyUrl} target="_blank" rel="noreferrer" className="text-brand-600 hover:text-brand-700">
+                    <a href={person.companyUrl} target="_blank" rel="noreferrer" className="text-brand-600 transition duration-200 hover:text-brand-700">
                       {person.companyName}
                     </a>
                   ) : (
@@ -141,7 +141,7 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
                         href={url}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-600 transition duration-200 hover:text-brand-700"
                       >
                         View post
                         <ExternalLink className="h-3 w-3" />
