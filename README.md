@@ -36,9 +36,5 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Database
 
-1. Copy `.env.example` to `.env` for local development
-2. Set `DATABASE_URL` to your Postgres connection string
-3. Run `npx prisma db push` before `npm run dev` if tables are missing
-
-On Vercel
+1. Copy `.env.example` to `.env` for local dev
 …(truncated)

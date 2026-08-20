@@ -1,22 +1,19 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T13:17:12.507Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T13:33:47.025Z.
 
 ## Overview
 
-linkedin-intelligence — Analyze payload already includes is_company (verified in app/api/analyze/route.ts and components/DashboardClient.tsx); history card titles already source the name field from profile details (lib/history-parse.ts pickAcross(['name'])); removed the location element from History cards in components/HistoryView.tsx and dropped the now-unused MapPin import; restored missing REPO_SUMMARY.md; echoed prisma/schema.prisma unchanged.
+linkedin-intelligence
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 47
 
 ## Features
 
-- LinkedIn entity search (company / personal) via workflow API
-- Engagement intelligence dashboard with Overview, People, Companies and Posts tabs
-- Analyze workflow request includes is_company flag matching the selected entity type
-- Analysis history page with cards sourced from profile details (name, logo, headline, industry, followers)
-- Arena email gating via middleware and ArenaEmailProvider
-- Fetch logging to Postgres via Prisma
+- Responsive UI with Tailwind CSS
+- Next.js App Router pages and components
+- History cards with entity name, company slug tag, and logo/avatar extraction
 
 ## Tech Stack
 
@@ -159,47 +156,20 @@ linkedin-intelligence — Analyze payload already includes is_company (verified 
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T13:17:12.507Z
+- **Updated at:** 2026-08-20T13:33:47.025Z
 - **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 
 #### **Changes to implement:**
 
-1. **Analyze API Payload Update (`is_company` Parameter):**
-* Update the payload structure when triggering the analyze endpoint (`/api/analyze` / workflow `3909ec63-faf0-4d69-abd1-499bc7b158d0`).
-* Include the new parameter `"is_company"` as a string value (`"true"` or `"false"`), dynamically matching the selected radio button option (`Company` vs `Personal`).
-* **Company Request Body Structure:**
-```json
-{
-  "name": "<SELECTED_NAME>",
-  "profile_url": "<SELECTED_PROFILE_URL>",
-  "account_id": "<SELECTED_ACCOUNT_ID>",
-  "slug": "<SELECTED_SLUG>",
-  "email": "<USER_EMAIL_FROM_SEARCH_PARAMS>",
-  "is_company": "true"
-}
-
-```
+1. **History Card Title Formatting:**
+* Fix the title rendering on History cards so it no longer displays generic text like `"History item 1"`.
+* Update the card header to dynamically display the entity name from `profile_details.name` (or `company_details.company` / `company_details.name`).
+* Display the `company_slug` (e.g., `position2`) as a subtitle or tag on the card.
 
 
-* **Personal Request Body Structure:**
-```json
-{
-  "name": "<SELECTED_NAME>",
-  "profile_url": "<SELECTED_PROFILE_URL>",
-  "account_id": "<SELECTED_ACCOUNT_ID>",
-  "slug": "<SELECTED_SLUG>",
-  "email": "<USER_EMAIL_FROM_SEARCH_PARAMS>",
-  "is_company": "false"
-}
-
-```
-
-
-
-
-2. **History Page Cards UI Adjustments:**
-* Update the title rendered on each History item card to use the `name` field directly from the profile details object.
-* Remove the location field/element from the History card UI display.
+2. **History Card Image/Logo Extraction:**
+* Extract and display the entity logo or profile avatar image on the History card using the image URL available in the data payload (e.g., `company_details.logo`, `output.company_profile.logo`, or `profile_picture_url`).
+* Include a clean fallback placeholder (e.g., entity name initials) if no image URL is present in the data record.
 
 
 
@@ -210,6 +180,3 @@ linkedin-intelligence — Analyze payload already includes is_company (verified 
 * Do not add extra features, optimizations, or refactors that weren't requested.
 * If a change requires touching a shared/common file, make the minimal edit needed and leave everything else untouched.
 * After implementing, list exactly which files and lines were changed, and why.
-
-
-error: "ENOENT: no such file or directory, open '/app/apps/sim/generated-apps/linkedin-intelligence-from-arena/REPO_SUMMARY.md'"

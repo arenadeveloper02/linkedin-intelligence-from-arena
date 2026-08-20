@@ -13,5 +13,4 @@ model FetchLog {
   email     String
   status    String
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt @default(now())
 }

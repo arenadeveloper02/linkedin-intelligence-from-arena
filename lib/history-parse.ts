@@ -119,7 +119,7 @@ function extractRows(raw: unknown): unknown[] {
  * Each entry keeps the raw dataset (`output` / `company_details`) as payload so
  * the dashboard can render it directly on selection. Card display fields
  * (title, logo, headline, industry, followers) are sourced from the
- * `company_details` object when present.
+ * `profile_details` / `company_details` / `company_profile` objects when present.
  */
 export function parseHistoryRows(raw: unknown): HistoryEntry[] {
   const rows = extractRows(raw);
@@ -135,12 +135,18 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
     }
     const detailSources: UnknownRecord[] = [];
     if (isRecord(payload)) {
-      const nested = deepDecode(
-        (payload as UnknownRecord).company_details ??
-          (payload as UnknownRecord).company_profile ??
-          (payload as UnknownRecord).companyDetails
-      );
-      if (isRecord(nested)) detailSources.push(nested);
+      const nestedKeys = [
+        'profile_details',
+        'profileDetails',
+        'company_details',
+        'companyDetails',
+        'company_profile',
+        'companyProfile',
+      ];
+      for (const nestedKey of nestedKeys) {
+        const nested = deepDecode((payload as UnknownRecord)[nestedKey]);
+        if (isRecord(nested)) detailSources.push(nested);
+      }
       detailSources.push(payload);
     }
     detailSources.push(record);
@@ -158,8 +164,9 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       }
       return 0;
     };
-    // Title comes from the `name` field on the profile details object first.
-    let title = pickAcross(['name']);
+    // Title comes from `profile_details.name` first, then `company_details.company`
+    // / `company_details.name` style fields across the detail sources.
+    let title = pickAcross(['name', 'company', 'company_name', 'companyName']);
     if (!title) {
       title = pickString(record, [
         'name',
@@ -174,8 +181,16 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       ]);
     }
     if (!title) {
-      title = pickAcross(['company_name', 'companyName', 'company', 'alias']);
+      title = pickAcross(['alias', 'search_name', 'searchName', 'title', 'query']);
     }
+    // The company slug (e.g. "position2") is surfaced as a subtitle/tag on the card.
+    const companySlug = pickAcross([
+      'company_slug',
+      'companySlug',
+      'slug',
+      'universal_name',
+      'universalName',
+    ]);
     let subtitle = pickString(record, [
       'company_profile_url',
       'companyProfileUrl',
@@ -207,7 +222,21 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       'updated_at',
       'updatedAt',
     ]);
-    let logoUrl = pickAcross(['logo', 'logo_url', 'logoUrl', 'image', 'image_url', 'profile_picture', 'avatar']);
+    // Logo/avatar extraction covers company_details.logo, company_profile.logo
+    // and profile_picture_url style fields across the detail sources.
+    let logoUrl = pickAcross([
+      'logo',
+      'logo_url',
+      'logoUrl',
+      'image',
+      'image_url',
+      'profile_picture',
+      'profile_picture_url',
+      'profilePictureUrl',
+      'avatar',
+      'avatar_url',
+      'avatarUrl',
+    ]);
     if (!isHttpUrl(logoUrl)) logoUrl = '';
     const headline = decodeEscapes(pickAcross(['headline', 'tagline', 'description', 'about', 'summary']));
     const industry = pickAcross(['industry', 'industries']);
@@ -225,6 +254,7 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       industry,
       location,
       followersCount,
+      companySlug,
     });
   });
   return entries;

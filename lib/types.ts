@@ -110,4 +110,5 @@ export interface HistoryEntry {
   industry: string;
   location: string;
   followersCount: number;
+  companySlug: string;
 }
