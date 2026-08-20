@@ -21,7 +21,6 @@ function toTime(value: string): number {
 
 export default function PostsTab({ posts, people, authorName, onSelectPost }: PostsTabProps) {
   const [seniority, setSeniority] = useState<SeniorityLevel | ''>('');
-  const [reactions, setReactions] = useState<string[]>([]);
   const [company, setCompany] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -38,11 +37,6 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
     return map;
   }, [posts, people]);
 
-  const reactionOptions = useMemo(
-    () =>
-      Array.from(new Set(people.flatMap((p) => p.interactions.map((i) => i.reactionType)).filter(Boolean))).sort(),
-    [people]
-  );
   const companyOptions = useMemo(
     () => Array.from(new Set(people.map((p) => p.companyName.trim()).filter(Boolean))).sort(),
     [people]
@@ -53,14 +47,6 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
       const engagers = engagersByPost.get(post.id) ?? [];
       if (seniority && !engagers.some((p) => p.seniority === seniority)) return false;
       if (company && !engagers.some((p) => p.companyName === company)) return false;
-      if (
-        reactions.length > 0 &&
-        !engagers.some((p) =>
-          p.interactions.some((i) => i.postKey === post.activityKey && reactions.includes(i.reactionType))
-        )
-      ) {
-        return false;
-      }
       const time = toTime(post.parsedDatetime);
       if (dateFrom && time > 0 && time < toTime(dateFrom)) return false;
       if (dateTo && time > 0 && time > toTime(`${dateTo}T23:59:59`)) return false;
@@ -75,11 +61,7 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
       }
       return toTime(b.parsedDatetime) - toTime(a.parsedDatetime);
     });
-  }, [posts, engagersByPost, seniority, company, reactions, dateFrom, dateTo, mostEngaged]);
-
-  const toggleReaction = (type: string) => {
-    setReactions((prev) => (prev.includes(type) ? prev.filter((r) => r !== type) : [...prev, type]));
-  };
+  }, [posts, engagersByPost, seniority, company, dateFrom, dateTo, mostEngaged]);
 
   const selectClass =
     'rounded-lg border border-grey-200 bg-white px-3 py-2 text-xs text-grey-700 focus:border-brand-600 focus:outline-none';
@@ -124,25 +106,6 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
             {mostEngaged ? 'Most engaged' : 'Newest first'}
           </button>
         </div>
-        {reactionOptions.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-grey-600">Reactions:</span>
-            {reactionOptions.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => toggleReaction(type)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                  reactions.includes(type)
-                    ? 'border-brand-600 bg-brand-50 text-brand-700'
-                    : 'border-grey-200 text-grey-600 hover:border-grey-400'
-                }`}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="space-y-4">

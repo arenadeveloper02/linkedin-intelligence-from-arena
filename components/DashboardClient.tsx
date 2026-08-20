@@ -28,11 +28,16 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SearchResultItem | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const analyze = async (item: SearchResultItem) => {
+  const analyze = async (item: SearchResultItem, isRefresh = false) => {
     setSelected(item);
     setError(null);
-    setView('loading');
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setView('loading');
+    }
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
@@ -75,6 +80,8 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         setError('Unable to reach the intelligence service. Please try again.');
       }
       setView('search');
+    } finally {
+      if (isRefresh) setRefreshing(false);
     }
   };
 
@@ -103,7 +110,8 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   return (
     <div className="min-h-screen bg-grey-50">
       <Topbar
-        loading={view === 'loading'}
+        loading={view === 'loading' || refreshing}
+        subtitle={view === 'dashboard' ? 'Signal tracking: people, companies & post engagement' : undefined}
         onBack={
           view === 'dashboard'
             ? () => {
@@ -112,7 +120,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
               }
             : undefined
         }
-        onRefresh={view === 'dashboard' && selected ? () => void analyze(selected) : undefined}
+        onRefresh={view === 'dashboard' && selected ? () => void analyze(selected, true) : undefined}
         onHistory={openHistory}
       />
       <div className={view === 'search' ? '' : 'hidden'}>

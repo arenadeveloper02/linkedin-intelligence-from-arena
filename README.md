@@ -1,14 +1,13 @@
 # linkedin-intelligence
 
-Added a strict global Access Denied guard on all page routes (Search '/', History '/history') that renders the standalone AccessDeniedScreen when the email/emailId URL search parameter is missing or empty (cookie fallback removed from page-level email resolution), and updated the History button handler in DashboardClient to read the email strictly from the live URL search params at runtime instead of the closure prop. Files changed: app/page.tsx (removed getArenaEmailId cookie fallback, added AccessDeniedScreen render when no email param), app/history/page.tsx (same guard), components/DashboardClient.tsx (openHistory now reads window.location.search at runtime, no closure/stored fallback), prisma/schema.prisma (echoed, unchanged).
+LinkedIn engagement intelligence dashboard — added an in-place Refresh flow on the dashboard/details view (including history-opened dashboards), restored the details header summary subtitle, removed the History card 'Open Dashboard' CTA (full-card click retained), and removed the Reaction type filter chips from the Posts tab.
 
 ## Features
 
-- LinkedIn company/person search
-- Engagement intelligence dashboard (Overview, People, Companies, Posts)
-- Analysis history reload
-- Strict URL email query parameter access gate on every view
-- Arena iframe email gating via middleware
+- Refresh button on the details/dashboard toolbar re-triggers the Analyze workflow with the currently selected profile payload and shows an active loading state
+- History cards no longer show an explicit 'Open Dashboard' CTA — clicking anywhere on the card opens the dashboard
+- Details page header shows the summary subtitle 'Signal tracking: people, companies & post engagement'
+- Posts tab filter toolbar no longer includes reaction-type chips; Seniority, Company, Date range, and Most Engaged sort remain
 
 ## Tech Stack
 

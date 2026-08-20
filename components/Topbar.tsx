@@ -4,12 +4,13 @@ import { ArrowLeft, History, Radar, RefreshCw } from 'lucide-react';
 
 interface TopbarProps {
   loading?: boolean;
+  subtitle?: string;
   onRefresh?: () => void;
   onBack?: () => void;
   onHistory?: () => void;
 }
 
-export default function Topbar({ loading = false, onRefresh, onBack, onHistory }: TopbarProps) {
+export default function Topbar({ loading = false, subtitle, onRefresh, onBack, onHistory }: TopbarProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-grey-200 bg-white">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
@@ -29,7 +30,9 @@ export default function Topbar({ loading = false, onRefresh, onBack, onHistory }
           </span>
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold text-grey-900 sm:text-base">LinkedIn Intelligence</h1>
-            <p className="hidden truncate text-xs text-grey-500 sm:block">Search, select and analyze LinkedIn engagement</p>
+            <p className="hidden truncate text-xs text-grey-500 sm:block">
+              {subtitle ?? 'Search, select and analyze LinkedIn engagement'}
+            </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">

@@ -1,21 +1,20 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T14:12:02.259Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T14:34:02.410Z.
 
 ## Overview
 
-Added a strict global Access Denied guard on all page routes (Search '/', History '/history') that renders the standalone AccessDeniedScreen when the email/emailId URL search parameter is missing or empty (cookie fallback removed from page-level email resolution), and updated the History button handler in DashboardClient to read the email strictly from the live URL search params at runtime instead of the closure prop. Files changed: app/page.tsx (removed getArenaEmailId cookie fallback, added AccessDeniedScreen render when no email param), app/history/page.tsx (same guard), components/DashboardClient.tsx (openHistory now reads window.location.search at runtime, no closure/stored fallback), prisma/schema.prisma (echoed, unchanged).
+LinkedIn engagement intelligence dashboard — added an in-place Refresh flow on the dashboard/details view (including history-opened dashboards), restored the details header summary subtitle, removed the History card 'Open Dashboard' CTA (full-card click retained), and removed the Reaction type filter chips from the Posts tab.
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 48
 
 ## Features
 
-- LinkedIn company/person search
-- Engagement intelligence dashboard (Overview, People, Companies, Posts)
-- Analysis history reload
-- Strict URL email query parameter access gate on every view
-- Arena iframe email gating via middleware
+- Refresh button on the details/dashboard toolbar re-triggers the Analyze workflow with the currently selected profile payload and shows an active loading state
+- History cards no longer show an explicit 'Open Dashboard' CTA — clicking anywhere on the card opens the dashboard
+- Details page header shows the summary subtitle 'Signal tracking: people, companies & post engagement'
+- Posts tab filter toolbar no longer includes reaction-type chips; Seniority, Company, Date range, and Most Engaged sort remain
 
 ## Tech Stack
 
@@ -160,19 +159,29 @@ Added a strict global Access Denied guard on all page routes (Search '/', Histor
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T14:12:02.259Z
+- **Updated at:** 2026-08-20T14:34:02.410Z
 - **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 
 #### **Changes to implement:**
 
-1. **Global Access Denied Guard Across All Pages/Views:**
-* Enforce a strict global `email` query parameter check across the entire application lifecycle and all view routes (Search, History, and Dashboard/Details pages).
-* If the `email` search parameter is missing, empty, or `null` in the current URL (e.g., `?email=...`), prevent all component rendering and API executions, and immediately render a standalone **Access Denied** page across all views.
+1. **Refresh Button on Details/Dashboard Page:**
+* Add a **Refresh** button to the toolbar/header of the Details (Dashboard) page.
+* On click, re-trigger the Analyze API (`POST [https://agent.thearena.ai/api/workflows/3909ec63-faf0-4d69-abd1-499bc7b158d0/execute](https://agent.thearena.ai/api/workflows/3909ec63-faf0-4d69-abd1-499bc7b158d0/execute)`) using the currently selected profile payload (`name`, `profile_url`, `account_id`, `slug`, `email`, and `is_company`).
+* Show an active loading state while the request is in progress and update the UI with the fresh API response data upon completion.
 
 
-2. **Strict URL Search Parameter Isolation for History Execution:**
-* Update the **History** button handler so that it strictly extracts the `email` value directly from the active URL search parameters at runtime.
-* Remove any fallback logic that auto-populates, persists, or reads a previously stored email address from global state, local storage, or closure variables when no `email` search parameter is present in the current URL.
+2. **History Card CTA Cleanup:**
+* Remove the explicit "Open Dashboard" CTA button/link from each History card.
+* Ensure the parent card container retains its full-card click handler so clicking anywhere on the card opens the corresponding dashboard.
+
+
+3. **Re-instate Summary Text on Details Page:**
+* Restore and retain the summary subtitle/description section on the Details page header (explaining tool functionality, e.g., *"Signal tracking: people, companies & post engagement"*) that was previously removed.
+
+
+4. **Remove Reaction Filter from Posts Tab:**
+* In the Posts tab filter toolbar, remove the Reaction type filter buttons/chips (e.g., 👍 Like, 🙌 Praise, 🫂 Empathy, etc.).
+* Retain all other existing post filters (Seniority, Company dropdown, Date range pickers, Most Engaged sort toggle, and Search).
 
 
 

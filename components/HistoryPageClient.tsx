@@ -21,6 +21,8 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
   const [error, setError] = useState<string | null>(null);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [data, setData] = useState<DashboardData | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<HistoryEntry | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,7 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
   };
 
   const openEntry = (entry: HistoryEntry) => {
+    setSelectedEntry(entry);
     const payload = extractIntelligencePayload(entry.payload);
     let parsed = parseWorkflowResponse(payload);
     if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
@@ -75,9 +78,59 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
     setData(parsed);
   };
 
+  const refresh = async () => {
+    if (!selectedEntry || refreshing) return;
+    setRefreshing(true);
+    try {
+      const profileUrl = /^https?:\/\//i.test(selectedEntry.subtitle.trim()) ? selectedEntry.subtitle.trim() : '';
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: selectedEntry.title,
+          profile_url: profileUrl,
+          account_id: '',
+          slug: selectedEntry.companySlug,
+          email: email.trim(),
+          is_company: selectedEntry.isCompany ? 'true' : 'false',
+        }),
+      });
+      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
+      try {
+        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
+      } catch {
+        json = { success: false };
+      }
+      if (res.ok && json.success) {
+        const payload = extractIntelligencePayload(json.data);
+        let parsed = parseWorkflowResponse(payload);
+        if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
+          parsed = parseWorkflowResponse(json.data);
+        }
+        setData(parsed);
+      }
+    } catch {
+      // Keep the currently loaded dashboard data if the refresh fails.
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-grey-50">
-      <Topbar onBack={data ? () => setData(null) : backToSearch} />
+      <Topbar
+        loading={refreshing}
+        subtitle={data ? 'Signal tracking: people, companies & post engagement' : undefined}
+        onBack={
+          data
+            ? () => {
+                setData(null);
+                setSelectedEntry(null);
+              }
+            : backToSearch
+        }
+        onRefresh={data && selectedEntry ? () => void refresh() : undefined}
+      />
       {data ? (
         <LinkedInIntelligenceDashboard data={data} />
       ) : (
@@ -168,9 +221,6 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
                       Analyzed {formatDate(entry.timestamp) || entry.timestamp}
                     </span>
                   )}
-                  <span className="mt-4 inline-flex h-9 items-center justify-center rounded-xl border border-brand-600 bg-white px-4 text-xs font-medium text-brand-600 transition duration-200 group-hover:bg-brand-600 group-hover:text-white">
-                    Open Dashboard
-                  </span>
                 </button>
               ))}
             </div>
