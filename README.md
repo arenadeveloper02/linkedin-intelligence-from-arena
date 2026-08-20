@@ -1,14 +1,14 @@
 # linkedin-intelligence
 
-Edited linkedin-intelligence-from-arena. Changes: (1) prisma/schema.prisma — restored the live FetchLog.updatedAt column (DateTime @updatedAt @default(now())) that the deploy error flagged as being dropped (potential_dataloss on 38 rows); (2) middleware.ts — access guard now also reads the `email` search parameter (in addition to `emailId` and the arena_email_id cookie) and rewrites to /access-denied when missing/empty, persisting the value in the cookie; (3) components/HistoryDrawer.tsx — added the Company vs Personal type badge (🏢 Company / 👤 Personal) on each history card header, derived from entry.isCompany which lib/history-parse.ts already computes from is_company/type/company_details payload attributes. HistoryPageClient.tsx and HistoryView.tsx already render this badge, so only the drawer needed it. lib/actions.ts and lib/types.ts are echoed unchanged per schema-return policy.
+LinkedIn engagement intelligence dashboard with an app-level Arena access gate: every route requires an emailId (search param or cookie) or renders the Access Denied screen.
 
 ## Features
 
-- Arena email gate: access denied when email/emailId is missing from the URL and cookie
-- History cards show Company vs Personal entity type badge
-- LinkedIn engagement intelligence dashboard
-- Analysis history with dashboard reload
-- Fetch logging to Neon Postgres via Prisma
+- App-level access gate: any page without an emailId search param or arena_email_id cookie renders the Access Denied screen
+- Middleware rewrite to /access-denied plus request-header forwarding of emailId for first-load reliability
+- Polished Arena DS access-denied UI shared between the route and the root layout gate
+- Persistent arena_email_id cookie (Path=/, Secure, SameSite=None) for cross-origin iframe navigation
+- LinkedIn engagement intelligence dashboard with search, history, people, companies and posts views
 
 ## Tech Stack
 
