@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, Loader2 } from 'lucide-react';
+import { Clock, Loader2, MapPin, Users } from 'lucide-react';
 import type { DashboardData, HistoryEntry } from '@/lib/types';
 import { parseWorkflowResponse } from '@/lib/parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
 import { parseHistoryRows } from '@/lib/history-parse';
-import { decodeUnicodeEscapes, initialsOf } from '@/lib/utils';
+import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf } from '@/lib/utils';
 import Topbar from '@/components/Topbar';
 import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
 
@@ -115,20 +115,49 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
                   className="group flex flex-col rounded-xl border border-grey-200 bg-white p-5 text-left shadow-ds-sm transition hover:border-brand-600 hover:shadow-ds-md"
                 >
                   <div className="flex items-start gap-3">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white">
-                      {initialsOf(entry.title || '?')}
-                    </span>
+                    {entry.logoUrl ? (
+                      <img
+                        src={entry.logoUrl}
+                        alt={entry.title}
+                        className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white">
+                        {initialsOf(entry.title || '?')}
+                      </span>
+                    )}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-grey-900">{decodeUnicodeEscapes(entry.title)}</p>
-                      {entry.subtitle && (
-                        <p className="mt-0.5 line-clamp-2 break-all text-xs text-grey-600">{entry.subtitle}</p>
-                      )}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="truncate text-sm font-semibold text-grey-900">
+                          {decodeUnicodeEscapes(entry.title) || 'Unknown'}
+                        </p>
+                        {entry.industry && (
+                          <span className="inline-flex items-center rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
+                            {entry.industry}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 line-clamp-2 break-all text-xs text-grey-600">
+                        {decodeUnicodeEscapes(entry.headline) || entry.subtitle || '—'}
+                      </p>
                     </div>
                   </div>
+                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-grey-500">
+                    <span className="flex min-w-0 items-center gap-1 truncate">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{entry.location || '—'}</span>
+                    </span>
+                    {entry.followersCount > 0 && (
+                      <span className="flex shrink-0 items-center gap-1">
+                        <Users className="h-3.5 w-3.5" />
+                        {formatNumber(entry.followersCount)} followers
+                      </span>
+                    )}
+                  </div>
                   {entry.timestamp && (
-                    <span className="mt-3 flex items-center gap-1 text-[11px] text-grey-400">
+                    <span className="mt-2 flex items-center gap-1 text-[11px] text-grey-400">
                       <Clock className="h-3 w-3" />
-                      {entry.timestamp}
+                      Analyzed {formatDate(entry.timestamp) || entry.timestamp}
                     </span>
                   )}
                   <span className="mt-4 inline-flex h-9 items-center justify-center rounded-xl border border-brand-600 bg-white px-4 text-xs font-medium text-brand-600 transition duration-200 group-hover:bg-brand-600 group-hover:text-white">

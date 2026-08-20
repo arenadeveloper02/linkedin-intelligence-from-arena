@@ -1,21 +1,21 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T11:30:03.515Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T11:39:50.169Z.
 
 ## Overview
 
-LinkedIn Intelligence dashboard. This edit: (1) History now navigates to a dedicated /history page (app/history/page.tsx + components/HistoryPageClient.tsx) rendering grid cards styled like the search result cards, sourcing title/subtitle from company_details (company, alias, company_profile_url) via lib/history-parse.ts; DashboardClient's History button now routes to /history instead of opening the drawer. (2) Personal profile analysis failures now always show the clean fallback banner and reset loading (components/DashboardClient.tsx analyze error branch) and app/api/analyze/route.ts guards upstream JSON parsing so no unhandled exception hangs the flow. (3) components/PersonDrawer.tsx: tightened padding (p-5→p-4, mt-5→mt-4, mt-6→mt-5) and removed redundant Target company / Connection degree rows. (4) Added decodeUnicodeEscapes() in lib/utils.ts and applied it where post snippets and history titles render, so labels like '✍️ Enhanced Article' display the real emoji instead of raw \u270D escapes. prisma/schema.prisma is returned unchanged (FetchLog only, no column edits).
+LinkedIn Intelligence — engagement intelligence dashboard with search, analysis, and history views. This edit fixes the HistoryEntry type build error (missing logoUrl/headline/industry/location/followersCount), renders history entries as rich company_details grid cards on the dedicated /history page, tightens the Person details drawer by hiding empty metadata and reducing padding, and decodes raw \uXXXX escape sequences (e.g. \u270D on the Enhanced Article label) in history titles/headlines.
 
 **Repository:** `linkedin-intelligence-from-arena`  
-**File count:** 46
+**File count:** 47
 
 ## Features
 
-- Search LinkedIn companies and people
-- Engagement intelligence dashboard with Overview, People, Companies and Posts tabs
-- Dedicated History page with grid cards that reopen past dashboards
-- Graceful fallback messaging for personal profile analysis failures
-- Unicode-safe label rendering for post content
+- LinkedIn company/person search with analyze workflow
+- Engagement intelligence dashboard (Overview, People, Companies, Posts)
+- Dedicated history page with company_details grid cards and Open Dashboard action
+- Graceful personal-profile analysis fallback banner
+- Unicode escape decoding for history titles and headlines
 
 ## Tech Stack
 
@@ -65,6 +65,7 @@ LinkedIn Intelligence dashboard. This edit: (1) History now navigates to a dedic
 - `components/DashboardClient.tsx`
 - `components/HistoryDrawer.tsx`
 - `components/HistoryPageClient.tsx`
+- `components/HistoryView.tsx`
 - `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
@@ -126,6 +127,7 @@ LinkedIn Intelligence dashboard. This edit: (1) History now navigates to a dedic
 - `components/DashboardClient.tsx`
 - `components/HistoryDrawer.tsx`
 - `components/HistoryPageClient.tsx`
+- `components/HistoryView.tsx`
 - `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
@@ -156,7 +158,7 @@ LinkedIn Intelligence dashboard. This edit: (1) History now navigates to a dedic
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T11:30:03.515Z
+- **Updated at:** 2026-08-20T11:39:50.169Z
 - **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 
 **Changes to implement:**
@@ -166,6 +168,7 @@ LinkedIn Intelligence dashboard. This edit: (1) History now navigates to a dedic
 * On the History Page, render historical entries as visual grid cards using the data from the `company_details` object (e.g., `company`, `alias`, `company_profile_url`).
 * Reuse and adapt the existing card component styling from the "Select & Analyze" search result cards, adding an action button to select and open the corresponding dashboard view for that history entry.
 
+"Command \"npm run build\" exited with 1\ncode: lint_or_type_error\nInspector: https://vercel.com/arena-developer-s-projects/linkedin-intelligence-from-arena/44xpF3Qst55wkKhq412odNc7uGW3\nBuild log:\nError: Command \"npm run build\" exited with 1\nType error: Property 'logoUrl' does not exist on type 'HistoryEntry'.\nFailed to compile."
 
 2. **Personal Profile Analysis Fallback & Handling:**
 * Update the `/api/analyze` request handler and frontend execution flow when analyzing a **Personal Profile**.
