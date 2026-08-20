@@ -134,7 +134,11 @@ export default function DashboardClient({ email }: DashboardClientProps) {
           tab === 'overview' ? (
             <OverviewTab data={data} companies={companyAggregates} onSelectCompany={openCompanyFromOverview} />
           ) : tab === 'people' ? (
-            <PeopleTab people={data.people} onSelectPerson={setSelectedPersonSlug} />
+            <PeopleTab
+              people={data.people}
+              companyName={data.company?.name ?? ''}
+              onSelectPerson={setSelectedPersonSlug}
+            />
           ) : tab === 'companies' ? (
             <CompaniesTab companies={companyAggregates} onSelectCompany={setSelectedCompanyName} />
           ) : (

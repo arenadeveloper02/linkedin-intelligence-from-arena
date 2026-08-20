@@ -1,6 +1,6 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-19T14:29:52.245Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T05:52:20.923Z.
 
 ## Overview
 
@@ -11,12 +11,12 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 
 ## Features
 
-- Company description with View more / View less toggle
-- Robust workflow-response parsing with header-aware column mapping (fixes locations, followers, connections, countries, degrees)
-- Working 'Hide internal employees' filter based on target-company match
-- De-duplicated people records merged by LinkedIn profile
-- Distinct Decision Maker badge color
-- Safe LinkedIn post links (never relative app URLs)
+- Company overview with expandable description (view more / view less)
+- Robust workflow response parsing: locations, countries, followers, connections, degrees
+- Deduplicated people list with working country/city/degree filters
+- Hide same-company employees filter in People tab
+- Decision Maker badge restyled with brand color
+- Post links always resolve to the real LinkedIn post URL
 
 ## Tech Stack
 
@@ -138,6 +138,6 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 
 ## Latest Change
 
-- **Updated at:** 2026-08-19T14:29:52.245Z
+- **Updated at:** 2026-08-20T05:52:20.923Z
 - **Request:** thing to fix:
 1. The description of the company is elipsed if its huge, add a view (more, less) 2. In the overview tab, top location section is empty, pls check that 3. in the people tab remove Hide internal employees functionlity is not working, lets say if the person belongs to the same company hide the person 4. peoples card locations are missing of the persons 5. People tab for Decision makers: change the badge color  6. People’s tab, view post link should point to the actual LinkedIn post not the https://linkedin-intelligence-from-arena.vercel.app/Employee 7. peoples tab: Person details Followers & Connections & location are empty 8. the filter, people search is giving me the duplicate data is should fix, filters dropdowns like all countries, cities, degree are empty.

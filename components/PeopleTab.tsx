@@ -8,6 +8,7 @@ import { CompanyBadge, DecisionMakerBadge, SeniorityBadge } from '@/components/W
 
 interface PeopleTabProps {
   people: Person[];
+  companyName: string;
   onSelectPerson: (slug: string) => void;
 }
 
@@ -15,6 +16,19 @@ interface PersonCardProps {
   person: Person;
   maxEngagement: number;
   onClick: () => void;
+}
+
+function normalizeCompany(value: string): string {
+  return value.trim().toLowerCase().replace(/[.,'\u2019]/g, '').replace(/\s+/g, ' ');
+}
+
+function sameCompany(a: string, b: string): boolean {
+  const x = normalizeCompany(a);
+  const y = normalizeCompany(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (x.length >= 4 && y.length >= 4) return x.includes(y) || y.includes(x);
+  return false;
 }
 
 function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
@@ -81,7 +95,7 @@ const BUCKETS: { level: SeniorityLevel; label: string }[] = [
   { level: 'Unknown', label: 'Other' },
 ];
 
-export default function PeopleTab({ people, onSelectPerson }: PeopleTabProps) {
+export default function PeopleTab({ people, companyName, onSelectPerson }: PeopleTabProps) {
   const [search, setSearch] = useState('');
   const [seniorities, setSeniorities] = useState<SeniorityLevel[]>([]);
   const [country, setCountry] = useState('');
@@ -91,35 +105,46 @@ export default function PeopleTab({ people, onSelectPerson }: PeopleTabProps) {
   const [hideInternal, setHideInternal] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
+  const uniquePeople = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Person[] = [];
+    for (const person of people) {
+      if (seen.has(person.slug)) continue;
+      seen.add(person.slug);
+      list.push(person);
+    }
+    return list;
+  }, [people]);
+
   const countries = useMemo(
-    () => Array.from(new Set(people.map((p) => p.country.trim()).filter(Boolean))).sort(),
-    [people]
+    () => Array.from(new Set(uniquePeople.map((p) => p.country.trim()).filter(Boolean))).sort(),
+    [uniquePeople]
   );
   const cities = useMemo(
-    () => Array.from(new Set(people.map((p) => p.location.trim()).filter(Boolean))).sort(),
-    [people]
+    () => Array.from(new Set(uniquePeople.map((p) => p.location.trim()).filter(Boolean))).sort(),
+    [uniquePeople]
   );
   const degrees = useMemo(
-    () => Array.from(new Set(people.map((p) => p.connectionDegree.trim()).filter(Boolean))).sort(),
-    [people]
+    () => Array.from(new Set(uniquePeople.map((p) => p.connectionDegree.trim()).filter(Boolean))).sort(),
+    [uniquePeople]
   );
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return people.filter((p) => {
+    return uniquePeople.filter((p) => {
       if (query) {
         const haystack = `${p.fullName} ${p.title} ${p.headline} ${p.companyName}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       if (seniorities.length > 0 && !seniorities.includes(p.seniority)) return false;
-      if (country && p.country !== country) return false;
-      if (city && p.location !== city) return false;
-      if (degree && p.connectionDegree !== degree) return false;
+      if (country && p.country.trim() !== country) return false;
+      if (city && p.location.trim() !== city) return false;
+      if (degree && p.connectionDegree.trim() !== degree) return false;
       if (decisionOnly && !p.isDecisionMaker) return false;
-      if (hideInternal && p.isInternal) return false;
+      if (hideInternal && (p.isInternal || sameCompany(p.companyName, companyName))) return false;
       return true;
     });
-  }, [people, search, seniorities, country, city, degree, decisionOnly, hideInternal]);
+  }, [uniquePeople, search, seniorities, country, city, degree, decisionOnly, hideInternal, companyName]);
 
   const maxEngagement = useMemo(() => filtered.reduce((max, p) => Math.max(max, p.engagementCount), 0), [filtered]);
 
@@ -201,10 +226,10 @@ export default function PeopleTab({ people, onSelectPerson }: PeopleTabProps) {
               onChange={(e) => setHideInternal(e.target.checked)}
               className="h-4 w-4 rounded border-grey-300 accent-brand-600"
             />
-            Hide internal employees
+            {companyName ? `Hide ${companyName} employees` : 'Hide internal employees'}
           </label>
           <span className="ml-auto text-xs text-grey-500">
-            {filtered.length} of {people.length} people
+            {filtered.length} of {uniquePeople.length} people
           </span>
         </div>
       </div>

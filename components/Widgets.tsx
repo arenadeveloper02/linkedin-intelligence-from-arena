@@ -91,7 +91,7 @@ export function SeniorityBadge({ level }: { level: SeniorityLevel }) {
 
 export function DecisionMakerBadge() {
   return (
-    <span className="inline-flex items-center rounded-full bg-success-700 px-2 py-0.5 text-[11px] font-medium text-white">
+    <span className="inline-flex items-center rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-medium text-white">
       Decision Maker
     </span>
   );

@@ -36,7 +36,10 @@ export default function OverviewTab({ data, companies, onSelectCompany }: Overvi
   }, [data]);
 
   const seniorityMix = useMemo(() => buildDistribution(data.people.map((p) => p.seniority)), [data]);
-  const topLocations = useMemo(() => buildDistribution(data.people.map((p) => p.location || p.country)), [data]);
+  const topLocations = useMemo(
+    () => buildDistribution(data.people.map((p) => p.location.trim() || p.country.trim())),
+    [data]
+  );
   const employeeMix = useMemo<DistributionItem[]>(() => {
     const internal = data.people.filter((p) => p.isInternal).length;
     const external = data.people.length - internal;
@@ -67,7 +70,7 @@ export default function OverviewTab({ data, companies, onSelectCompany }: Overvi
                 <p className={`text-sm text-grey-600 ${taglineExpanded ? 'whitespace-pre-line' : 'line-clamp-2'}`}>
                   {data.company.tagline}
                 </p>
-                {data.company.tagline.length > 140 && (
+                {(data.company.tagline.length > 120 || data.company.tagline.includes('\n')) && (
                   <button
                     type="button"
                     onClick={() => setTaglineExpanded((prev) => !prev)}

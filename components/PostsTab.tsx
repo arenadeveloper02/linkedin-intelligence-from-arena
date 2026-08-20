@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, ExternalLink, MessageSquare, Repeat2, ThumbsUp } from 'lucide-react';
 import type { Person, PostItem, SeniorityLevel } from '@/lib/types';
-import { formatDate, formatNumber, initialsOf } from '@/lib/utils';
+import { formatDate, formatNumber, initialsOf, resolvePostUrl } from '@/lib/utils';
 
 interface PostsTabProps {
   posts: PostItem[];
@@ -150,6 +150,7 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
           const engagers = engagersByPost.get(post.id) ?? [];
           const dmCount = engagers.filter((p) => p.isDecisionMaker).length;
           const cSuiteCount = engagers.filter((p) => p.seniority === 'C-Level').length;
+          const viewUrl = resolvePostUrl(post.shareUrl, '', post.activityKey);
           return (
             <div
               key={post.id}
@@ -193,9 +194,9 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
                   <Repeat2 className="h-3 w-3" />
                   {formatNumber(post.repostCounter)}
                 </span>
-                {post.shareUrl && (
+                {viewUrl && (
                   <a
-                    href={post.shareUrl}
+                    href={viewUrl}
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
