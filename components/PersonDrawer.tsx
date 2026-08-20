@@ -2,7 +2,7 @@
 
 import { ExternalLink, MapPin, Users, X } from 'lucide-react';
 import type { Person, PostItem } from '@/lib/types';
-import { formatDate, formatNumber, initialsOf, resolvePostUrl } from '@/lib/utils';
+import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf, resolvePostUrl } from '@/lib/utils';
 import { CompanyBadge, DecisionMakerBadge, ReactionBadge, SeniorityBadge } from '@/components/Widgets';
 
 interface PersonDrawerProps {
@@ -19,13 +19,13 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
     <div className="fixed inset-0 z-40">
       <div className="absolute inset-0 bg-grey-900/70" onClick={onClose} aria-hidden="true" />
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-ds-xl">
-        <header className="flex items-start justify-between border-b border-grey-200 p-5">
+        <header className="flex items-start justify-between border-b border-grey-200 p-4">
           <h2 className="text-sm font-semibold text-grey-500">Person details</h2>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-grey-500 transition duration-200 hover:bg-grey-100">
             <X className="h-5 w-5" />
           </button>
         </header>
-        <div className="p-5">
+        <div className="p-4">
           <div className="flex items-start gap-4">
             {person.avatarUrl ? (
               <img src={person.avatarUrl} alt={person.fullName} className="h-16 w-16 rounded-full object-cover" />
@@ -57,7 +57,7 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
             </a>
           )}
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-lg border border-grey-200 p-3">
               <p className="flex items-center gap-1 text-[11px] text-grey-500">
                 <Users className="h-3.5 w-3.5" /> Followers
@@ -76,7 +76,7 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
             </div>
           </div>
 
-          <dl className="mt-5 space-y-2 text-sm">
+          <dl className="mt-4 space-y-2 text-sm">
             {person.companyName && (
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-grey-500">Company</dt>
@@ -91,27 +91,15 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
                 </dd>
               </div>
             )}
-            {person.targetCompany && (
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-grey-500">Target company</dt>
-                <dd className="truncate font-medium text-grey-900">{person.targetCompany}</dd>
-              </div>
-            )}
             <div className="flex items-center justify-between gap-3">
               <dt className="flex items-center gap-1 text-grey-500">
                 <MapPin className="h-3.5 w-3.5" /> Location
               </dt>
               <dd className="truncate font-medium text-grey-900">{person.location || person.country || '—'}</dd>
             </div>
-            {person.connectionDegree && (
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-grey-500">Connection degree</dt>
-                <dd className="font-medium text-grey-900">{person.connectionDegree}</dd>
-              </div>
-            )}
           </dl>
 
-          <h4 className="mt-6 text-sm font-semibold text-grey-900">
+          <h4 className="mt-5 text-sm font-semibold text-grey-900">
             Post interaction history ({person.interactions.length})
           </h4>
           {person.interactions.length === 0 ? (
@@ -130,7 +118,7 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
                       )}
                     </div>
                     <p className="mt-2 line-clamp-3 text-xs text-grey-600">
-                      {interaction.postSnippet || post?.text || 'Post content unavailable.'}
+                      {decodeUnicodeEscapes(interaction.postSnippet || post?.text || 'Post content unavailable.')}
                     </p>
                     {url && (
                       <a

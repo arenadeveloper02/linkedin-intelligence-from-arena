@@ -86,23 +86,27 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       'name',
       'company_name',
       'companyName',
+      'company',
+      'alias',
       'search_name',
       'searchName',
       'title',
       'query',
     ]);
     if (!title && isRecord(payload)) {
-      title = pickString(payload, ['name', 'company_name', 'companyName']);
+      title = pickString(payload, ['name', 'company_name', 'companyName', 'company', 'alias']);
       if (!title) {
         const nested = deepDecode(
           (payload as UnknownRecord).company_details ?? (payload as UnknownRecord).company_profile
         );
         if (isRecord(nested)) {
-          title = pickString(nested, ['name', 'company_name', 'companyName']);
+          title = pickString(nested, ['name', 'company_name', 'companyName', 'company', 'alias']);
         }
       }
     }
-    const subtitle = pickString(record, [
+    let subtitle = pickString(record, [
+      'company_profile_url',
+      'companyProfileUrl',
       'profile_url',
       'profileUrl',
       'linkedin_url',
@@ -111,6 +115,16 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       'slug',
       'headline',
     ]);
+    if (!subtitle && isRecord(payload)) {
+      subtitle = pickString(payload, [
+        'company_profile_url',
+        'companyProfileUrl',
+        'profile_url',
+        'linkedin_url',
+        'url',
+        'alias',
+      ]);
+    }
     const timestamp = pickString(record, [
       'created_at',
       'createdAt',

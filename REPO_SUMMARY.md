@@ -1,20 +1,22 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T10:50:15.087Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T11:27:56.555Z.
 
 ## Overview
 
-LinkedIn Intelligence — search LinkedIn people and companies, analyze engagement, and revisit past analyses via a history drawer.
+LinkedIn Intelligence — engagement intelligence dashboard with full-screen history view, graceful personal-profile error handling, and clean unicode rendering.
 
 **Repository:** `linkedin-intelligence-from-arena`  
-**File count:** 44
+**File count:** 45
 
 ## Features
 
-- Company/Personal LinkedIn search with Company selected by default
-- Engagement intelligence dashboard with Overview, People, Companies and Posts tabs
-- History button in topbar that lists past analyses and reloads them into the dashboard
-- Graceful handling of personal-profile analysis failures with a friendly error banner
+- Full-screen history page view with visual cards mapped from company/profile details
+- History cards match Select & Analyze card design with hover behaviors
+- Clicking a history card loads its dataset into the dashboard tabs
+- Graceful 500 error handling for personal profile analysis with friendly banner
+- Personal profile detail rendering without broken images or undefined labels
+- Unicode escape sequence decoding for post text and labels (e.g. Enhanced Article ✍️)
 
 ## Tech Stack
 
@@ -61,6 +63,7 @@ LinkedIn Intelligence — search LinkedIn people and companies, analyze engageme
 - `components/CompanyDrawer.tsx`
 - `components/DashboardClient.tsx`
 - `components/HistoryDrawer.tsx`
+- `components/HistoryView.tsx`
 - `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
@@ -120,6 +123,7 @@ LinkedIn Intelligence — search LinkedIn people and companies, analyze engageme
 - `components/CompanyDrawer.tsx`
 - `components/DashboardClient.tsx`
 - `components/HistoryDrawer.tsx`
+- `components/HistoryView.tsx`
 - `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
@@ -150,74 +154,52 @@ LinkedIn Intelligence — search LinkedIn people and companies, analyze engageme
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T10:50:15.087Z
-- **Request:** Here is the updated prompt specification reflecting your requested changes:
+- **Updated at:** 2026-08-20T11:27:56.555Z
+- **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 
----
+#### **Changes to implement:**
 
-### UI Architecture Prompt: LinkedIn Intelligence (Updated Workflow)
-
-You are tasked with updating the **LinkedIn Intelligence** web application. Maintain the reusable **Dashboard Component** (Overview, People, Companies, Posts tabs and drawers) and apply the following functional and UI updates:
-
----
-
-### **1. Topbar Cleanup & History Feature**
-
-* **Remove Elements**: Remove the theme switcher button/icon and the user email display menu from the top right section of the topbar header.
-* **Add History Button**: Add a **"History"** button (with a clock/history icon) to the top right of the topbar.
-* **History API Trigger**: Clicking the **History** button must trigger the following API call using the `email` value extracted from the URL search parameters (`?email=<user_email>`):
-* **Endpoint**: `POST [https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute](https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute)`
-* **Headers**:
-* `X-API-Key`: `sk-sim-g6HxaMjNLmbQ-iqVeQnYIK3nuiyogqPs`
-* `Content-Type`: `application/json`
+1. **History View Page Refactor**:
+* Replace the existing slide-over drawer modal for **History** with a dedicated full-screen / sub-route page view.
+* Render history records returned by the History API (`POST [https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute](https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute)`) as visual cards.
+* Map title, logo, headline/tagline, and metadata for each history card directly from the `company_details` (or profile details) object within each row.
+* Match the card design, structure, and hover behaviors to the existing *"Select & Analyze"* search result cards, with slight visual adaptations suitable for historical records.
+* Clicking a history card must load its underlying dataset (`output`) into the dashboard component view (Overview, People, Companies, Posts tabs).
 
 
-* **Payload**:
+2. **Personal Profile Analysis Error Handling & Graceful Fallback**:
+* Handle the 500 error returned by `/api/analyze` when selecting a Personal profile:
 ```json
-{
-  "email": "<EMAIL_FROM_URL_SEARCH_PARAMS>"
-}
+{"success":false,"error":"Intelligence service responded with status 500."}
 
 ```
 
 
+* Intercept HTTP status 500 responses on personal profile analysis triggers gracefully without unmounting components or leaving the UI in an infinite loading state.
+* Display a user-friendly error notification banner or toast message: *"Unable to process personal profile intelligence at this time. Please select a Company profile or try again later."*
+* Reset loading indicators immediately upon catching this error.
 
 
-* **History Modal / Drawer View**:
-* Display the returned history items (`output.rows`) inside a modal or slide-over drawer as visual cards.
-* **Card Action**: Clicking any card from the history view immediately loads its `company_details` / `output` dataset directly into the main **Dashboard Component** (rendering the Overview, People, Companies, and Posts tabs).
+3. **Personal Profile Details View Adjustments**:
+* Tweaked layout rendering specifically for personal profile detail cards and drawers: adjust missing data fields (such as missing company logo, follower count, or industry) so they render gracefully without broken image placeholders or `undefined` labels. Apply minor styling adjustments strictly where necessary to accommodate personal profile schemas.
 
 
-
----
-
-### **2. Initial Search Screen Controls & Radio Selection**
-
-* **Default Radio Selection**: Set the **"Company"** radio button as selected by default (`isCompany: "true"`).
-* **Reposition Controls**: Move the radio buttons above the search input bar.
-* **Options**:
-* `Company` (`isCompany: "true"`) [Selected by default]
-* `Personal` (`isCompany: "false"`)
+4. **Unicode Escape Sequence Fix**:
+* Fix the "Enhanced Article" label so it does not display the raw Unicode escape sequence (`\u270D`). Render the actual character properly (`✍️`) or display plain text "Enhanced Article" ensuring correct encoding/decoding across source files, JSON, and template definitions.
 
 
 
 ---
 
-### **3. Personal Search & Analysis Error Handling (Service 500 Fix)**
+#### **Constraints:**
 
-* **Service 500 Graceful Degradation**: To prevent `/api/analyze` failures (`status 500`) when clicking a Personal profile card:
-* Catch 500 HTTP errors gracefully during the analysis trigger call.
-* If the downstream endpoint fails, fall back to displaying a user-friendly error notification banner: *"Unable to process personal profile intelligence at this time. Please select a Company profile or try again later."*
-* Ensure loading states reset correctly without crashing the UI or blocking navigation.
+* Only touch the files/functions directly related to the points above.
+* Do not change variable names, code style, or structure outside the scope of these changes.
+* Do not add extra features, optimizations, or refactors that weren't requested.
+* If a change requires touching a shared/common file, make the minimal edit needed and leave everything else untouched.
 
+---
 
-model FetchLog {
-  id        String   @id @default(cuid())
-  email     String
-  status    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+#### **Reporting Requirement:**
 
-}
-
-Dont drop the updatedAt DateTime @default(now()) or any other column
+After implementing, list exactly which files and lines were changed, and explain why each change was made.

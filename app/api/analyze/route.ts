@@ -71,7 +71,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const data = (await upstream.json()) as unknown;
+    let data: unknown = null;
+    try {
+      data = (await upstream.json()) as unknown;
+    } catch {
+      await recordFetchLog(email, 'analyze-error:invalid-json');
+      return NextResponse.json(
+        { success: false, error: 'Intelligence service returned an invalid response. Please try again.' },
+        { status: 502 }
+      );
+    }
     await recordFetchLog(email, 'analyze-success');
     return NextResponse.json({ success: true, data });
   } catch {

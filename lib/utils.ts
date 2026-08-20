@@ -22,6 +22,17 @@ export function initialsOf(name: string): string {
   return (first + last).toUpperCase();
 }
 
+/**
+ * Decodes literal unicode escape sequences (e.g. "\\u270D") that arrive
+ * double-encoded in workflow data so labels like "Enhanced Article" render
+ * the real emoji character instead of the raw escape text.
+ */
+export function decodeUnicodeEscapes(value: string): string {
+  return value.replace(/\\u([0-9a-fA-F]{4})/g, (_match, hex: string) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
 export function displayNameFromEmail(email: string): string {
   const local = email.split('@')[0] ?? '';
   const pretty = local
