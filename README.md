@@ -1,14 +1,14 @@
 # linkedin-intelligence
 
-LinkedIn engagement intelligence dashboard with an app-level Arena access gate: every route requires an emailId (search param or cookie) or renders the Access Denied screen.
+Added a strict global Access Denied guard on all page routes (Search '/', History '/history') that renders the standalone AccessDeniedScreen when the email/emailId URL search parameter is missing or empty (cookie fallback removed from page-level email resolution), and updated the History button handler in DashboardClient to read the email strictly from the live URL search params at runtime instead of the closure prop. Files changed: app/page.tsx (removed getArenaEmailId cookie fallback, added AccessDeniedScreen render when no email param), app/history/page.tsx (same guard), components/DashboardClient.tsx (openHistory now reads window.location.search at runtime, no closure/stored fallback), prisma/schema.prisma (echoed, unchanged).
 
 ## Features
 
-- App-level access gate: any page without an emailId search param or arena_email_id cookie renders the Access Denied screen
-- Middleware rewrite to /access-denied plus request-header forwarding of emailId for first-load reliability
-- Polished Arena DS access-denied UI shared between the route and the root layout gate
-- Persistent arena_email_id cookie (Path=/, Secure, SameSite=None) for cross-origin iframe navigation
-- LinkedIn engagement intelligence dashboard with search, history, people, companies and posts views
+- LinkedIn company/person search
+- Engagement intelligence dashboard (Overview, People, Companies, Posts)
+- Analysis history reload
+- Strict URL email query parameter access gate on every view
+- Arena iframe email gating via middleware
 
 ## Tech Stack
 

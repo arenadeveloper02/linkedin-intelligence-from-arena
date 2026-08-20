@@ -1,5 +1,5 @@
 import DashboardClient from '@/components/DashboardClient';
-import { getArenaEmailId } from '@/lib/arena-email';
+import { AccessDeniedScreen } from '@/components/AccessDeniedScreen';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,8 +11,10 @@ export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const emailIdParam = typeof params.emailId === 'string' ? params.emailId.trim() : '';
   const emailParam = typeof params.email === 'string' ? params.email.trim() : '';
-  const fromCookie = await getArenaEmailId();
-  // Email is optional: use it when provided via search params or cookie, otherwise continue without it.
-  const email = emailIdParam || emailParam || fromCookie || '';
+  // Strict global guard: the email must come from the current URL search params only.
+  const email = emailIdParam || emailParam;
+  if (!email) {
+    return <AccessDeniedScreen />;
+  }
   return <DashboardClient email={email} />;
 }

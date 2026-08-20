@@ -1,21 +1,21 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T14:02:55.050Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T14:12:02.259Z.
 
 ## Overview
 
-LinkedIn engagement intelligence dashboard with an app-level Arena access gate: every route requires an emailId (search param or cookie) or renders the Access Denied screen.
+Added a strict global Access Denied guard on all page routes (Search '/', History '/history') that renders the standalone AccessDeniedScreen when the email/emailId URL search parameter is missing or empty (cookie fallback removed from page-level email resolution), and updated the History button handler in DashboardClient to read the email strictly from the live URL search params at runtime instead of the closure prop. Files changed: app/page.tsx (removed getArenaEmailId cookie fallback, added AccessDeniedScreen render when no email param), app/history/page.tsx (same guard), components/DashboardClient.tsx (openHistory now reads window.location.search at runtime, no closure/stored fallback), prisma/schema.prisma (echoed, unchanged).
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 48
 
 ## Features
 
-- App-level access gate: any page without an emailId search param or arena_email_id cookie renders the Access Denied screen
-- Middleware rewrite to /access-denied plus request-header forwarding of emailId for first-load reliability
-- Polished Arena DS access-denied UI shared between the route and the root layout gate
-- Persistent arena_email_id cookie (Path=/, Secure, SameSite=None) for cross-origin iframe navigation
-- LinkedIn engagement intelligence dashboard with search, history, people, companies and posts views
+- LinkedIn company/person search
+- Engagement intelligence dashboard (Overview, People, Companies, Posts)
+- Analysis history reload
+- Strict URL email query parameter access gate on every view
+- Arena iframe email gating via middleware
 
 ## Tech Stack
 
@@ -160,5 +160,26 @@ LinkedIn engagement intelligence dashboard with an app-level Arena access gate: 
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T14:02:55.050Z
-- **Request:** add a access deained page full app level, if there is no email id https://linkedin-intelligence-from-arena.vercel.app in the search params if go to any page if there is no email if in the search param show access denied page
+- **Updated at:** 2026-08-20T14:12:02.259Z
+- **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
+
+#### **Changes to implement:**
+
+1. **Global Access Denied Guard Across All Pages/Views:**
+* Enforce a strict global `email` query parameter check across the entire application lifecycle and all view routes (Search, History, and Dashboard/Details pages).
+* If the `email` search parameter is missing, empty, or `null` in the current URL (e.g., `?email=...`), prevent all component rendering and API executions, and immediately render a standalone **Access Denied** page across all views.
+
+
+2. **Strict URL Search Parameter Isolation for History Execution:**
+* Update the **History** button handler so that it strictly extracts the `email` value directly from the active URL search parameters at runtime.
+* Remove any fallback logic that auto-populates, persists, or reads a previously stored email address from global state, local storage, or closure variables when no `email` search parameter is present in the current URL.
+
+
+
+#### **Constraints:**
+
+* Only touch the files/functions directly related to the points above.
+* Do not change variable names, code style, or structure outside the scope of these changes.
+* Do not add extra features, optimizations, or refactors that weren't requested.
+* If a change requires touching a shared/common file, make the minimal edit needed and leave everything else untouched.
+* After implementing, list exactly which files and lines were changed, and why.

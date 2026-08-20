@@ -79,8 +79,11 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   };
 
   const openHistory = () => {
-    const trimmed = email.trim();
-    router.push(trimmed ? `/history?emailId=${encodeURIComponent(trimmed)}` : '/history');
+    // Strictly extract the email from the active URL search parameters at runtime.
+    // No fallback to props, state, storage, or closure variables.
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromUrl = urlParams.get('emailId')?.trim() || urlParams.get('email')?.trim() || '';
+    router.push(fromUrl ? `/history?emailId=${encodeURIComponent(fromUrl)}` : '/history');
   };
 
   if (!isValidEmail) {
