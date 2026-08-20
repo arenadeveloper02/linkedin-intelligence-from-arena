@@ -11,7 +11,7 @@ interface SearchScreenProps {
 }
 
 export default function SearchScreen({ onSelect }: SearchScreenProps) {
-  const [isCompany, setIsCompany] = useState(false);
+  const [isCompany, setIsCompany] = useState(true);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,21 +57,21 @@ export default function SearchScreen({ onSelect }: SearchScreenProps) {
               <input
                 type="radio"
                 name="entityType"
-                checked={!isCompany}
-                onChange={() => setIsCompany(false)}
-                className="h-4 w-4 accent-brand-600"
-              />
-              Personal
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-grey-700">
-              <input
-                type="radio"
-                name="entityType"
                 checked={isCompany}
                 onChange={() => setIsCompany(true)}
                 className="h-4 w-4 accent-brand-600"
               />
               Company
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-grey-700">
+              <input
+                type="radio"
+                name="entityType"
+                checked={!isCompany}
+                onChange={() => setIsCompany(false)}
+                className="h-4 w-4 accent-brand-600"
+              />
+              Personal
             </label>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">

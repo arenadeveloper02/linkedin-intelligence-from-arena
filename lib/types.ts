@@ -98,3 +98,11 @@ export interface SearchResultItem {
   premium: boolean;
   isCompany: boolean;
 }
+
+export interface HistoryEntry {
+  id: string;
+  title: string;
+  subtitle: string;
+  timestamp: string;
+  payload: unknown;
+}

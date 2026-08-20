@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { DashboardData, SearchResultItem } from '@/lib/types';
+import type { DashboardData, HistoryEntry, SearchResultItem } from '@/lib/types';
 import { parseWorkflowResponse } from '@/lib/parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
+import { parseHistoryRows } from '@/lib/history-parse';
 import Topbar from '@/components/Topbar';
 import SearchScreen from '@/components/SearchScreen';
+import HistoryDrawer from '@/components/HistoryDrawer';
 import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
 
 interface DashboardClientProps {
@@ -14,6 +16,9 @@ interface DashboardClientProps {
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const PERSONAL_PROFILE_ERROR =
+  'Unable to process personal profile intelligence at this time. Please select a Company profile or try again later.';
 
 type ViewState = 'search' | 'loading' | 'dashboard';
 
@@ -23,6 +28,10 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SearchResultItem | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
 
   const analyze = async (item: SearchResultItem) => {
     setSelected(item);
@@ -40,9 +49,18 @@ export default function DashboardClient({ email }: DashboardClientProps) {
           email: email.trim(),
         }),
       });
-      const json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
+      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
+      try {
+        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
+      } catch {
+        json = { success: false };
+      }
       if (!res.ok || !json.success) {
-        setError(json.error ?? `Request failed with status ${res.status}.`);
+        if (!item.isCompany && res.status >= 500) {
+          setError(PERSONAL_PROFILE_ERROR);
+        } else {
+          setError(json.error ?? `Request failed with status ${res.status}.`);
+        }
         setView('search');
         return;
       }
@@ -54,9 +72,56 @@ export default function DashboardClient({ email }: DashboardClientProps) {
       setData(parsed);
       setView('dashboard');
     } catch {
-      setError('Unable to reach the intelligence service. Please try again.');
+      if (!item.isCompany) {
+        setError(PERSONAL_PROFILE_ERROR);
+      } else {
+        setError('Unable to reach the intelligence service. Please try again.');
+      }
       setView('search');
     }
+  };
+
+  const openHistory = async () => {
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const res = await fetch('/api/intelligence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
+      try {
+        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
+      } catch {
+        json = { success: false };
+      }
+      if (!res.ok || !json.success) {
+        setHistoryError(json.error ?? `History request failed with status ${res.status}.`);
+        setHistoryEntries([]);
+      } else {
+        setHistoryEntries(parseHistoryRows(json.data));
+      }
+    } catch {
+      setHistoryError('Unable to load history. Please try again.');
+      setHistoryEntries([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const selectHistoryEntry = (entry: HistoryEntry) => {
+    const payload = extractIntelligencePayload(entry.payload);
+    let parsed = parseWorkflowResponse(payload);
+    if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
+      parsed = parseWorkflowResponse(entry.payload);
+    }
+    setSelected(null);
+    setError(null);
+    setData(parsed);
+    setHistoryOpen(false);
+    setView('dashboard');
   };
 
   if (!isValidEmail) {
@@ -76,7 +141,6 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   return (
     <div className="min-h-screen bg-grey-50">
       <Topbar
-        email={email.trim()}
         loading={view === 'loading'}
         onBack={
           view === 'dashboard'
@@ -87,6 +151,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
             : undefined
         }
         onRefresh={view === 'dashboard' && selected ? () => void analyze(selected) : undefined}
+        onHistory={() => void openHistory()}
       />
       <div className={view === 'search' ? '' : 'hidden'}>
         <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
@@ -108,6 +173,15 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         </main>
       )}
       {view === 'dashboard' && data && <LinkedInIntelligenceDashboard data={data} />}
+      {historyOpen && (
+        <HistoryDrawer
+          entries={historyEntries}
+          loading={historyLoading}
+          error={historyError}
+          onClose={() => setHistoryOpen(false)}
+          onSelect={selectHistoryEntry}
+        />
+      )}
     </div>
   );
 }

@@ -1,22 +1,20 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T10:16:59.619Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T10:50:15.087Z.
 
 ## Overview
 
-Two-step LinkedIn intelligence app: search people or companies, select an entity, and explore a 4-tab engagement intelligence dashboard.
+LinkedIn Intelligence — search LinkedIn people and companies, analyze engagement, and revisit past analyses via a history drawer.
 
 **Repository:** `linkedin-intelligence-from-arena`  
-**File count:** 42
+**File count:** 44
 
 ## Features
 
-- Entity search with Personal/Company toggle
-- Search results grid with verified/premium badges
-- Select & Analyze flow triggering the intelligence workflow
-- Reusable 4-tab intelligence dashboard (Overview, People, Companies, Posts)
-- Person, company and post detail drawers/modals
-- Back to Search navigation
+- Company/Personal LinkedIn search with Company selected by default
+- Engagement intelligence dashboard with Overview, People, Companies and Posts tabs
+- History button in topbar that lists past analyses and reloads them into the dashboard
+- Graceful handling of personal-profile analysis failures with a friendly error banner
 
 ## Tech Stack
 
@@ -62,6 +60,7 @@ Two-step LinkedIn intelligence app: search people or companies, select an entity
 - `components/CompaniesTab.tsx`
 - `components/CompanyDrawer.tsx`
 - `components/DashboardClient.tsx`
+- `components/HistoryDrawer.tsx`
 - `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
@@ -78,6 +77,7 @@ Two-step LinkedIn intelligence app: search people or companies, select an entity
 - `lib/actions.ts`
 - `lib/arena-email-constants.ts`
 - `lib/arena-email.ts`
+- `lib/history-parse.ts`
 - `lib/parse.ts`
 - `lib/prisma.ts`
 - `lib/search-parse.ts`
@@ -119,6 +119,7 @@ Two-step LinkedIn intelligence app: search people or companies, select an entity
 - `components/CompaniesTab.tsx`
 - `components/CompanyDrawer.tsx`
 - `components/DashboardClient.tsx`
+- `components/HistoryDrawer.tsx`
 - `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
@@ -132,6 +133,7 @@ Two-step LinkedIn intelligence app: search people or companies, select an entity
 - `lib/actions.ts`
 - `lib/arena-email-constants.ts`
 - `lib/arena-email.ts`
+- `lib/history-parse.ts`
 - `lib/parse.ts`
 - `lib/prisma.ts`
 - `lib/search-parse.ts`
@@ -148,120 +150,62 @@ Two-step LinkedIn intelligence app: search people or companies, select an entity
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T10:16:59.619Z
-- **Request:** need to update the entire ui:
-Here is the architecture and prompt specification to rebuild the UI into a **Two-Step Search & Intelligence Flow**.
-
-The prompt separates the previously built **Dashboard UI** into a standalone, reusable view component (`LinkedInIntelligenceDashboard`) and introduces a new **Search & Entity Selection Step** (`SearchScreen`).
+- **Updated at:** 2026-08-20T10:50:15.087Z
+- **Request:** Here is the updated prompt specification reflecting your requested changes:
 
 ---
 
-### UI Architecture Prompt: LinkedIn Intelligence Search & Intelligence App
+### UI Architecture Prompt: LinkedIn Intelligence (Updated Workflow)
 
-You are tasked with rebuilding the **LinkedIn Intelligence** application into a 2-step workflow:
-
-1. **Search & Entity Selection View**
-2. **Detailed Intelligence Dashboard View** (Encapsulate the previously created 4-tab dashboard UI into a reusable component)
+You are tasked with updating the **LinkedIn Intelligence** web application. Maintain the reusable **Dashboard Component** (Overview, People, Companies, Posts tabs and drawers) and apply the following functional and UI updates:
 
 ---
 
-### Step 1: Initial Search Screen
+### **1. Topbar Cleanup & History Feature**
 
-#### **1. Header & Access Guard**
-
-* Extract the user `email` from the URL parameter `?email=<user_email>`.
-* If `email` is missing, render an **Access Denied** message.
-* Render the application topbar with the user's details and theme toggle.
-
-#### **2. Search Form UI**
-
-Build a search card at the top of the page with the following controls:
-
-* **Entity Type Selector (Radio Buttons)**:
-* `Personal` (`isCompany: "false"`) [Default]
-* `Company` (`isCompany: "true"`)
-
-
-* **Search Input & Action Button**:
-* Input field with placeholder: *"Search for a person or company on LinkedIn..."*
-* **Search** button (triggers API 1).
-* Show a loading spinner during execution.
-
-
-
-#### **3. Search API Call (API 1 - Entity Search)**
-
-* **Endpoint**: `POST [https://agent.thearena.ai/api/workflows/970f3a69-e05e-4b68-b90c-4887a1e3cd2e/execute](https://agent.thearena.ai/api/workflows/970f3a69-e05e-4b68-b90c-4887a1e3cd2e/execute)`
+* **Remove Elements**: Remove the theme switcher button/icon and the user email display menu from the top right section of the topbar header.
+* **Add History Button**: Add a **"History"** button (with a clock/history icon) to the top right of the topbar.
+* **History API Trigger**: Clicking the **History** button must trigger the following API call using the `email` value extracted from the URL search parameters (`?email=<user_email>`):
+* **Endpoint**: `POST [https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute](https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute)`
 * **Headers**:
 * `X-API-Key`: `sk-sim-g6HxaMjNLmbQ-iqVeQnYIK3nuiyogqPs`
 * `Content-Type`: `application/json`
 
 
-* **Request Body**:
+* **Payload**:
 ```json
 {
-  "searchInput": "<USER_INPUT>",
-  "isCompany": "<"true" | "false">"
+  "email": "<EMAIL_FROM_URL_SEARCH_PARAMS>"
 }
 
 ```
 
 
 
-#### **4. Search Results Grid**
 
-Render the returned `results` array below the search bar in a clean card grid format:
-
-* **People Card Data Mapping**:
-* **Avatar**: `profile_picture_url` (Fallback to name initials gradient if `null`).
-* **Title / Name**: `name`
-* **Headline**: `headline`
-* **Location**: `location`
-* **Badges**: Show `verified` badge if `true`, show `premium` badge if `true`.
-* **Followers**: `followers_count` (if available).
-* **Action**: Render a *"Select & Analyze"* button on card click.
-
-
-* **Company Card Data Mapping**:
-* **Logo**: `logo` (Fallback to company name initial).
-* **Title / Name**: `name`
-* **Industry**: `industry` (Show `N/A` if `"undefined"` or `null`).
-* **Location**: `location`
-* **Followers**: `followers_count`
-* **Action**: Render a *"Select & Analyze"* button on card click.
+* **History Modal / Drawer View**:
+* Display the returned history items (`output.rows`) inside a modal or slide-over drawer as visual cards.
+* **Card Action**: Clicking any card from the history view immediately loads its `company_details` / `output` dataset directly into the main **Dashboard Component** (rendering the Overview, People, Companies, and Posts tabs).
 
 
 
 ---
 
-### Step 2: Entity Selection & Dashboard Loading
+### **2. Initial Search Screen Controls & Radio Selection**
 
-#### **1. Selection API Call (API 2 - Trigger Intelligence Workflow)**
-
-When a user clicks on any Person or Company card from the search results, transition the page into a full-screen loading state (*"Gathering LinkedIn Intelligence for [Selected Name]..."*) and execute API 2.
-
-* **Endpoint**: `POST [https://agent.thearena.ai/api/workflows/3909ec63-faf0-4d69-abd1-499bc7b158d0/execute](https://agent.thearena.ai/api/workflows/3909ec63-faf0-4d69-abd1-499bc7b158d0/execute)`
-* **Headers**:
-* `X-API-Key`: `sk-sim-g6HxaMjNLmbQ-iqVeQnYIK3nuiyogqPs`
-* `Content-Type`: `application/json`
-
-
-* **Request Body**:
-```json
-{
-  "name": "<SELECTED_ITEM_NAME>",
-  "profile_url": "<SELECTED_ITEM_PROFILE_URL>",
-  "account_id": "<SELECTED_ITEM_ACCOUNT_ID_OR_ID>",
-  "slug": "<SELECTED_ITEM_COMPANY_SLUG_OR_PUBLIC_IDENTIFIER>",
-  "email": "<EMAIL_FROM_SEARCH_PARAMS>"
-}
-
-```
+* **Default Radio Selection**: Set the **"Company"** radio button as selected by default (`isCompany: "true"`).
+* **Reposition Controls**: Move the radio buttons above the search input bar.
+* **Options**:
+* `Company` (`isCompany: "true"`) [Selected by default]
+* `Personal` (`isCompany: "false"`)
 
 
 
-#### **2. Transition to Dashboard**
+---
 
-* Upon receiving a `success: true` response from API 2, hide the Search UI and mount the reusable **`LinkedInIntelligenceDashboard`** component.
-* Pass the returned intelligence payload (`output.rows[0].output`) to populate the dashboard tabs (**Overview**, **People**, **Companies**, **Posts**) and sliding detail drawers.
-* Provide a **"← Back to Search"** button in the header toolbar to allow users to return to the Search Screen at any time.
+### **3. Personal Search & Analysis Error Handling (Service 500 Fix)**
+
+* **Service 500 Graceful Degradation**: To prevent `/api/analyze` failures (`status 500`) when clicking a Personal profile card:
+* Catch 500 HTTP errors gracefully during the analysis trigger call.
+* If the downstream endpoint fails, fall back to displaying a user-friendly error notification banner: *"Unable to process personal profile intelligence at this time. Please select a Company profile or try again later."*
+* Ensure loading states reset correctly without crashing the UI or blocking navigation.
