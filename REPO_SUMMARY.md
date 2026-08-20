@@ -1,21 +1,21 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T11:39:50.169Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T13:10:07.108Z.
 
 ## Overview
 
-LinkedIn Intelligence — engagement intelligence dashboard with search, analysis, and history views. This edit fixes the HistoryEntry type build error (missing logoUrl/headline/industry/location/followersCount), renders history entries as rich company_details grid cards on the dedicated /history page, tightens the Person details drawer by hiding empty metadata and reducing padding, and decodes raw \uXXXX escape sequences (e.g. \u270D on the Enhanced Article label) in history titles/headlines.
+LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company activity.
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 47
 
 ## Features
 
-- LinkedIn company/person search with analyze workflow
-- Engagement intelligence dashboard (Overview, People, Companies, Posts)
-- Dedicated history page with company_details grid cards and Open Dashboard action
-- Graceful personal-profile analysis fallback banner
-- Unicode escape decoding for history titles and headlines
+- Analyze API now forwards is_company ("true"/"false") based on the selected Company/Personal entity type
+- History cards use the name field from the profile details object as the card title
+- History cards no longer display the location field
+- Responsive UI with Tailwind CSS
+- Next.js App Router pages and components
 
 ## Tech Stack
 
@@ -158,34 +158,57 @@ LinkedIn Intelligence — engagement intelligence dashboard with search, analysi
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T11:39:50.169Z
-- **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
+- **Updated at:** 2026-08-20T13:10:07.108Z
+- **Request:** Here is the updated **Arena Dev Block Update Prompt** incorporating your API payload update (`is_company` field) and the History card display adjustments.
 
-**Changes to implement:**
+---
 
-1. **History View Navigation & Card UI:**
-* Instead of opening in a drawer or modal, navigate to a dedicated **History Page** upon clicking the **History** button.
-* On the History Page, render historical entries as visual grid cards using the data from the `company_details` object (e.g., `company`, `alias`, `company_profile_url`).
-* Reuse and adapt the existing card component styling from the "Select & Analyze" search result cards, adding an action button to select and open the corresponding dashboard view for that history entry.
+### Arena Dev Block Update Prompt
 
-"Command \"npm run build\" exited with 1\ncode: lint_or_type_error\nInspector: https://vercel.com/arena-developer-s-projects/linkedin-intelligence-from-arena/44xpF3Qst55wkKhq412odNc7uGW3\nBuild log:\nError: Command \"npm run build\" exited with 1\nType error: Property 'logoUrl' does not exist on type 'HistoryEntry'.\nFailed to compile."
+Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 
-2. **Personal Profile Analysis Fallback & Handling:**
-* Update the `/api/analyze` request handler and frontend execution flow when analyzing a **Personal Profile**.
-* If the analysis endpoint returns an error (e.g., `{"success":false,"error":"Intelligence service responded with status 500."}`), catch the exception gracefully without throwing an unhandled UI crash or hanging the loading state.
-* Display a clean, prominent notification banner/toast: `"Unable to process personal profile intelligence at this time. Please select a Company profile or try again later."` and cleanly reset the loading indicators.
+#### **Changes to implement:**
+
+1. **Analyze API Payload Update (`is_company` Parameter):**
+* Update the payload structure when triggering the analyze endpoint (`/api/analyze` / workflow `3909ec63-faf0-4d69-abd1-499bc7b158d0`).
+* Include the new parameter `"is_company"` as a string value (`"true"` or `"false"`), dynamically matching the selected radio button option (`Company` vs `Personal`).
+* **Company Request Body Structure:**
+```json
+{
+  "name": "<SELECTED_NAME>",
+  "profile_url": "<SELECTED_PROFILE_URL>",
+  "account_id": "<SELECTED_ACCOUNT_ID>",
+  "slug": "<SELECTED_SLUG>",
+  "email": "<USER_EMAIL_FROM_SEARCH_PARAMS>",
+  "is_company": "true"
+}
+
+```
 
 
-3. **Personal Profile Details View Tweaks:**
-* Adjust the layout and spacing on the Personal Profile details screen by reducing redundant metadata fields and tightening container margins/padding slightly.
+* **Personal Request Body Structure:**
+```json
+{
+  "name": "<SELECTED_NAME>",
+  "profile_url": "<SELECTED_PROFILE_URL>",
+  "account_id": "<SELECTED_ACCOUNT_ID>",
+  "slug": "<SELECTED_SLUG>",
+  "email": "<USER_EMAIL_FROM_SEARCH_PARAMS>",
+  "is_company": "false"
+}
+
+```
 
 
-4. **Unicode Escape Sequence Fix:**
-* Fix the `"Enhanced Article"` label so it does not display the raw Unicode escape sequence (`\u270D`). Render the actual emoji character properly (`✍️ Enhanced Article`) or display plain text `"Enhanced Article"` ensuring correct string encoding/decoding across source templates and JSON definitions.
+
+
+2. **History Page Cards UI Adjustments:**
+* Update the title rendered on each History item card to use the `name` field directly from the profile details object.
+* Remove the location field/element from the History card UI display.
 
 
 
-**Constraints:**
+#### **Constraints:**
 
 * Only touch the files/functions directly related to the points above.
 * Do not change variable names, code style, or structure outside the scope of these changes.

@@ -1,38 +1,53 @@
-# LinkedIn Intelligence
+# linkedin-intelligence
 
-An engagement intelligence dashboard that pulls LinkedIn company activity from an Arena workflow and turns it into actionable views of people, companies and posts.
+Engagement intelligence dashboard for LinkedIn company activity. This edit adds the is_company parameter to the analyze workflow payload (matching the Company/Personal radio selection) and updates History page cards to use the profile details name field as title and remove the location element.
 
 ## Features
 
-- Email query-parameter access guard (`?email=you@company.com`) with an Access Denied fallback
-- Server-proxied POST to the Arena workflow endpoint with a manual Refresh button
-- Robust normalization of double-encoded workflow payloads (company profile, posts, engagers, engagement records)
-- **Overview** — KPI cards, reaction / seniority / location / employee-mix distributions and a clickable Top Companies leaderboard
-- **People** — seniority buckets, search, chips, country/city/degree dropdowns, decision-maker and hide-internal toggles
-- **Companies** — minimum-people thresholds, search and seniority segment bars
-- **Posts** — seniority / reaction / company / date filters and Most Engaged sorting
-- Person drawer, company drawer and post inspection modal with reaction badges
-- Prisma-backed fetch logging on every workflow request
+- LinkedIn entity search (Company / Personal)
+- Engagement intelligence dashboard (Overview, People, Companies, Posts)
+- Analyze workflow with is_company parameter matching selected entity type
+- Analysis history page with profile-name card titles
+- Arena email gating via middleware and cookie
 
-## Tech stack
+## Tech Stack
 
-- Next.js 15 (App Router) + React 19 + TypeScript
-- Tailwind CSS 3 with Arena design tokens (Poppins, brand blue `#1A73E8`)
-- Prisma + Neon Postgres (fetch logs)
-- lucide-react icons
+- Next.js ^15.3.3 (App Router)
+- React ^19.0.0
+- Tailwind CSS v3
+- TypeScript
+- Prisma + PostgreSQL (Neon on Vercel)
 
-## Local setup
+## Routes
+
+- `/`
+- `/access-denied`
+- `/history`
+
+## Getting Started
 
 ```bash
 npm install
-cp .env.example .env   # set DATABASE_URL
+cp .env.example .env
 npm run dev
 ```
 
-Open `http://localhost:3000/?email=saiteja.s@position2.com` — the email parameter is required.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Deploy notes
+## Database
 
-- `npm run build` runs `prisma generate && prisma db push && next build`
-- On Vercel + Neon, `DATABASE_URL` is injected when the database is connected
-- The app is iframe-friendly (`Content-Security-Policy: frame-ancestors *`) and persists the email identity in the `arena_email_id` cookie
+1. Copy `.env.example` to `.env` for local development
+2. Set `DATABASE_URL` to your Postgres connection string
+3. Run `npx prisma db push` before `npm run dev` if tables are missing
+
+On Vercel, `DATABASE_URL` is injected when Neon is connected to the project.
+
+## Scripts
+
+- `npm run dev` — start the development server
+- `npm run build` — production build (runs Prisma generate/push when configured)
+- `npm run start` — run the production server locally
+
+## Deploy
+
+This project is intended for deployment on [Vercel](https://vercel.com). Connect the GitHub repository and deploy the `main` branch.

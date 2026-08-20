@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, Loader2, MapPin, Users } from 'lucide-react';
+import { Clock, Loader2, Users } from 'lucide-react';
 import type { DashboardData, HistoryEntry } from '@/lib/types';
 import { parseWorkflowResponse } from '@/lib/parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
@@ -142,18 +142,14 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-grey-500">
-                    <span className="flex min-w-0 items-center gap-1 truncate">
-                      <MapPin className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{entry.location || '—'}</span>
-                    </span>
-                    {entry.followersCount > 0 && (
+                  {entry.followersCount > 0 && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-grey-500">
                       <span className="flex shrink-0 items-center gap-1">
                         <Users className="h-3.5 w-3.5" />
                         {formatNumber(entry.followersCount)} followers
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   {entry.timestamp && (
                     <span className="mt-2 flex items-center gap-1 text-[11px] text-grey-400">
                       <Clock className="h-3 w-3" />

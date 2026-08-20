@@ -118,7 +118,7 @@ function extractRows(raw: unknown): unknown[] {
  * Parses the intelligence history workflow response (`output.rows`) into cards.
  * Each entry keeps the raw dataset (`output` / `company_details`) as payload so
  * the dashboard can render it directly on selection. Card display fields
- * (title, logo, headline, industry, location, followers) are sourced from the
+ * (title, logo, headline, industry, followers) are sourced from the
  * `company_details` object when present.
  */
 export function parseHistoryRows(raw: unknown): HistoryEntry[] {
@@ -158,19 +158,23 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       }
       return 0;
     };
-    let title = pickString(record, [
-      'name',
-      'company_name',
-      'companyName',
-      'company',
-      'alias',
-      'search_name',
-      'searchName',
-      'title',
-      'query',
-    ]);
+    // Title comes from the `name` field on the profile details object first.
+    let title = pickAcross(['name']);
     if (!title) {
-      title = pickAcross(['name', 'company_name', 'companyName', 'company', 'alias']);
+      title = pickString(record, [
+        'name',
+        'company_name',
+        'companyName',
+        'company',
+        'alias',
+        'search_name',
+        'searchName',
+        'title',
+        'query',
+      ]);
+    }
+    if (!title) {
+      title = pickAcross(['company_name', 'companyName', 'company', 'alias']);
     }
     let subtitle = pickString(record, [
       'company_profile_url',

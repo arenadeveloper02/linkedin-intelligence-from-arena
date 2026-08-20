@@ -43,6 +43,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
           account_id: item.id,
           slug: item.slug,
           email: email.trim(),
+          is_company: item.isCompany ? 'true' : 'false',
         }),
       });
       let json: { success: boolean; error?: string; data?: unknown } = { success: false };

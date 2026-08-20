@@ -15,6 +15,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let accountId = '';
   let slug = '';
   let email = '';
+  let isCompany = 'true';
   try {
     const body = (await request.json()) as {
       name?: unknown;
@@ -22,12 +23,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       account_id?: unknown;
       slug?: unknown;
       email?: unknown;
+      is_company?: unknown;
     };
     name = typeof body.name === 'string' ? body.name.trim() : '';
     profileUrl = typeof body.profile_url === 'string' ? body.profile_url.trim() : '';
     accountId = typeof body.account_id === 'string' ? body.account_id.trim() : '';
     slug = typeof body.slug === 'string' ? body.slug.trim() : '';
     email = typeof body.email === 'string' ? body.email.trim() : '';
+    isCompany =
+      typeof body.is_company === 'string' && body.is_company.trim().toLowerCase() === 'false'
+        ? 'false'
+        : 'true';
   } catch {
     name = '';
   }
@@ -59,6 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         account_id: accountId,
         slug,
         email,
+        is_company: isCompany,
       }),
       cache: 'no-store',
     });
