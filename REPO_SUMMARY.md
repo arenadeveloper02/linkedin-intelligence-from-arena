@@ -1,21 +1,22 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T13:10:07.108Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T13:17:12.507Z.
 
 ## Overview
 
-LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company activity.
+linkedin-intelligence — Analyze payload already includes is_company (verified in app/api/analyze/route.ts and components/DashboardClient.tsx); history card titles already source the name field from profile details (lib/history-parse.ts pickAcross(['name'])); removed the location element from History cards in components/HistoryView.tsx and dropped the now-unused MapPin import; restored missing REPO_SUMMARY.md; echoed prisma/schema.prisma unchanged.
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 47
 
 ## Features
 
-- Analyze API now forwards is_company ("true"/"false") based on the selected Company/Personal entity type
-- History cards use the name field from the profile details object as the card title
-- History cards no longer display the location field
-- Responsive UI with Tailwind CSS
-- Next.js App Router pages and components
+- LinkedIn entity search (company / personal) via workflow API
+- Engagement intelligence dashboard with Overview, People, Companies and Posts tabs
+- Analyze workflow request includes is_company flag matching the selected entity type
+- Analysis history page with cards sourced from profile details (name, logo, headline, industry, followers)
+- Arena email gating via middleware and ArenaEmailProvider
+- Fetch logging to Postgres via Prisma
 
 ## Tech Stack
 
@@ -158,14 +159,8 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T13:10:07.108Z
-- **Request:** Here is the updated **Arena Dev Block Update Prompt** incorporating your API payload update (`is_company` field) and the History card display adjustments.
-
----
-
-### Arena Dev Block Update Prompt
-
-Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
+- **Updated at:** 2026-08-20T13:17:12.507Z
+- **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 
 #### **Changes to implement:**
 
@@ -215,3 +210,6 @@ Implement the following functionality in the codebase. Do not modify, refactor, 
 * Do not add extra features, optimizations, or refactors that weren't requested.
 * If a change requires touching a shared/common file, make the minimal edit needed and leave everything else untouched.
 * After implementing, list exactly which files and lines were changed, and why.
+
+
+error: "ENOENT: no such file or directory, open '/app/apps/sim/generated-apps/linkedin-intelligence-from-arena/REPO_SUMMARY.md'"
