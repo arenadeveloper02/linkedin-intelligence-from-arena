@@ -14,6 +14,7 @@ interface ParseAccumulator {
   company: CompanyProfile | null;
   postsById: Map<string, PostItem>;
   peopleBySlug: Map<string, Person>;
+  engagements: EngagementRecord[];
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -330,200 +331,141 @@ function normalizeDegree(value: string): string {
   return value.trim();
 }
 
-function looksLikeLocation(value: string): boolean {
-  const v = value.trim();
-  if (!v || v.length > 80 || isHttpUrl(v)) return false;
-  if (/\d{4,}/.test(v)) return false;
-  if (v.includes('@')) return false;
-  return /^[A-Za-z\u00C0-\u00FF .'()-]+,\s*[A-Za-z\u00C0-\u00FF .'()-]+/.test(v);
-}
-
-function applyCellHeuristics(row: RawPersonRow, cells: unknown[]): RawPersonRow {
-  if (!row.linkedinUrl.includes('linkedin.com/in')) {
-    const found = cells.find((cell) => typeof cell === 'string' && cell.includes('linkedin.com/in'));
-    if (typeof found === 'string') row.linkedinUrl = found;
-  }
-  if (!isHttpUrl(row.postUrl) || !row.postUrl.toLowerCase().includes('linkedin.com')) {
-    const found = cells.find(
-      (cell) =>
-        typeof cell === 'string' &&
-        isHttpUrl(cell) &&
-        cell.includes('linkedin.com') &&
-        !cell.includes('linkedin.com/in') &&
-        !cell.includes('linkedin.com/company')
-    );
-    row.postUrl = typeof found === 'string' ? found : '';
-  }
-  if (!row.companyUrl.includes('linkedin.com/company')) {
-    const found = cells.find((cell) => typeof cell === 'string' && cell.includes('linkedin.com/company'));
-    if (typeof found === 'string') row.companyUrl = found;
-  }
-  if (!isHttpUrl(row.avatarUrl)) {
-    const found = cells.find(
-      (cell) =>
-        typeof cell === 'string' &&
-        isHttpUrl(cell) &&
-        !cell.includes('linkedin.com') &&
-        /(licdn\.com|\.jpg|\.jpeg|\.png|\.webp|image|photo|avatar)/i.test(cell)
-    );
-    row.avatarUrl = typeof found === 'string' ? found : '';
-  }
-  if (!row.location) {
-    const found = cells.find((cell) => typeof cell === 'string' && looksLikeLocation(cell));
-    if (typeof found === 'string') row.location = found.trim();
-  }
-  if (!row.country && row.location.includes(',')) {
-    const parts = row.location.split(',').map((part) => part.trim()).filter(Boolean);
-    if (parts.length > 0) row.country = parts[parts.length - 1];
-  }
-  if (!row.reactionType) {
-    const found = cells.find((cell) => typeof cell === 'string' && REACTION_WORDS.test(cell.trim()));
-    if (typeof found === 'string') row.reactionType = found.trim().toUpperCase();
-  }
-  if (!row.connectionDegree) {
-    const found = cells.find(
-      (cell) =>
-        typeof cell === 'string' && /^(1st|2nd|3rd|3\+|distance_[123]|out[\s_-]?of[\s_-]?network)$/i.test(cell.trim())
-    );
-    if (typeof found === 'string') row.connectionDegree = found;
-  }
-  row.connectionDegree = normalizeDegree(row.connectionDegree);
-  return row;
-}
-
-function slugForRow(row: RawPersonRow): string {
-  const urlMatch = row.linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/i);
-  if (urlMatch) {
-    try {
-      return decodeURIComponent(urlMatch[1]).toLowerCase();
-    } catch {
-      return urlMatch[1].toLowerCase();
-    }
-  }
-  const urn = row.urn.trim();
-  if (urn) return `urn:${normalizeName(urn)}`;
-  const name = normalizeName(row.fullName || `${row.firstName} ${row.lastName}`);
-  return name ? `name:${name}` : '';
-}
-
 function truthy(value: string): boolean {
   return /^(true|yes|y|1)$/i.test(value.trim());
 }
 
-function sameCompany(a: string, b: string): boolean {
-  const x = normalizeName(a);
-  const y = normalizeName(b);
-  if (!x || !y) return false;
-  if (x === y) return true;
-  if (x.length >= 4 && y.length >= 4) return x.includes(y) || y.includes(x);
-  return false;
+function slugForRow(row: RawPersonRow): string {
+  const url = row.linkedinUrl.trim();
+  const match = url.match(/linkedin\.com\/in\/([^/?#]+)/i);
+  if (match) return match[1].toLowerCase();
+  const urn = row.urn.trim();
+  if (urn) return urn.toLowerCase();
+  const name = normalizeName(row.fullName || `${row.firstName} ${row.lastName}`);
+  return name;
 }
 
-function mergePersonRow(acc: ParseAccumulator, row: RawPersonRow): void {
+function ingestRow(row: RawPersonRow, acc: ParseAccumulator): void {
+  const fullName = row.fullName.trim() || `${row.firstName} ${row.lastName}`.trim();
   const slug = slugForRow(row);
   if (!slug) return;
-  const fullName = row.fullName.trim() || `${row.firstName} ${row.lastName}`.trim();
+  if (!fullName && !isHttpUrl(row.linkedinUrl)) return;
+
   const seniority = classifySeniority(row.seniorityRaw, row.title, row.headline);
-  const isDecisionMaker = truthy(row.decisionMakerRaw) || seniority === 'C-Level' || seniority === 'Director';
-  const relationship = row.relationshipType.trim();
-  const isInternalByRelationship = /(internal|employee|team)/i.test(relationship);
-  const isInternalByTarget = sameCompany(row.companyName, row.targetCompany);
+  const relationship = row.relationshipType.trim().toLowerCase();
+  const isInternal = /(employee|internal|colleague|team member|staff)/.test(relationship);
+  const reactionRaw = row.reactionType.trim();
+  const reactionType = reactionRaw && REACTION_WORDS.test(reactionRaw) ? reactionRaw.toUpperCase() : reactionRaw ? reactionRaw.toUpperCase() : 'LIKE';
 
   const postKeySource = row.postUrn.trim() || row.postUrl.trim();
   const interaction: PersonInteraction | null = postKeySource
     ? {
         postKey: extractActivityId(postKeySource),
-        postUrl: isHttpUrl(row.postUrl) && row.postUrl.toLowerCase().includes('linkedin.com') ? row.postUrl.trim() : '',
+        postUrl: isHttpUrl(row.postUrl) ? row.postUrl.trim() : '',
         postSnippet: row.postSnippet.trim(),
-        reactionType: (row.reactionType.trim() || 'LIKE').toUpperCase(),
+        reactionType,
       }
     : null;
 
-  const existing = acc.peopleBySlug.get(slug);
-  if (!existing) {
-    acc.peopleBySlug.set(slug, {
+  let person = acc.peopleBySlug.get(slug);
+  if (!person) {
+    person = {
       slug,
       fullName,
       firstName: row.firstName.trim(),
       lastName: row.lastName.trim(),
-      linkedinUrl: row.linkedinUrl.trim(),
+      linkedinUrl: isHttpUrl(row.linkedinUrl) ? row.linkedinUrl.trim() : '',
       headline: row.headline.trim(),
       title: row.title.trim(),
       seniorityRaw: row.seniorityRaw.trim(),
       seniority,
-      isDecisionMaker,
+      isDecisionMaker: row.decisionMakerRaw.trim()
+        ? truthy(row.decisionMakerRaw)
+        : seniority === 'C-Level' || seniority === 'Director',
       companyName: row.companyName.trim(),
-      companyUrl: row.companyUrl.trim(),
+      companyUrl: isHttpUrl(row.companyUrl) ? row.companyUrl.trim() : '',
       location: row.location.trim(),
       country: row.country.trim(),
-      connectionDegree: row.connectionDegree.trim(),
+      connectionDegree: normalizeDegree(row.connectionDegree),
       followersCount: row.followersCount,
       connectionsCount: row.connectionsCount,
-      relationshipType: relationship,
-      isInternal: isInternalByRelationship || isInternalByTarget,
-      avatarUrl: row.avatarUrl.trim(),
+      relationshipType: row.relationshipType.trim(),
+      isInternal,
+      avatarUrl: isHttpUrl(row.avatarUrl) ? row.avatarUrl.trim() : '',
       targetCompany: row.targetCompany.trim(),
-      interactions: interaction ? [interaction] : [],
-      engagementCount: interaction ? 1 : 0,
-    });
-    return;
+      interactions: [],
+      engagementCount: 0,
+    };
+    acc.peopleBySlug.set(slug, person);
+  } else {
+    if (!person.avatarUrl && isHttpUrl(row.avatarUrl)) person.avatarUrl = row.avatarUrl.trim();
+    if (!person.headline && row.headline.trim()) person.headline = row.headline.trim();
+    if (!person.title && row.title.trim()) person.title = row.title.trim();
+    if (!person.companyName && row.companyName.trim()) person.companyName = row.companyName.trim();
+    if (!person.companyUrl && isHttpUrl(row.companyUrl)) person.companyUrl = row.companyUrl.trim();
+    if (!person.location && row.location.trim()) person.location = row.location.trim();
+    if (!person.country && row.country.trim()) person.country = row.country.trim();
+    if (!person.linkedinUrl && isHttpUrl(row.linkedinUrl)) person.linkedinUrl = row.linkedinUrl.trim();
+    if (person.followersCount === 0 && row.followersCount > 0) person.followersCount = row.followersCount;
+    if (person.connectionsCount === 0 && row.connectionsCount > 0) person.connectionsCount = row.connectionsCount;
   }
-
-  if (!existing.fullName && fullName) existing.fullName = fullName;
-  if (!existing.firstName && row.firstName.trim()) existing.firstName = row.firstName.trim();
-  if (!existing.lastName && row.lastName.trim()) existing.lastName = row.lastName.trim();
-  if (!existing.linkedinUrl && row.linkedinUrl.trim()) existing.linkedinUrl = row.linkedinUrl.trim();
-  if (!existing.headline && row.headline.trim()) existing.headline = row.headline.trim();
-  if (!existing.title && row.title.trim()) existing.title = row.title.trim();
-  if (!existing.seniorityRaw && row.seniorityRaw.trim()) existing.seniorityRaw = row.seniorityRaw.trim();
-  if (existing.seniority === 'Unknown' && seniority !== 'Unknown') existing.seniority = seniority;
-  if (!existing.companyName && row.companyName.trim()) existing.companyName = row.companyName.trim();
-  if (!existing.companyUrl && row.companyUrl.trim()) existing.companyUrl = row.companyUrl.trim();
-  if (!existing.location && row.location.trim()) existing.location = row.location.trim();
-  if (!existing.country && row.country.trim()) existing.country = row.country.trim();
-  if (!existing.connectionDegree && row.connectionDegree.trim()) existing.connectionDegree = row.connectionDegree.trim();
-  if (existing.followersCount === 0 && row.followersCount > 0) existing.followersCount = row.followersCount;
-  if (existing.connectionsCount === 0 && row.connectionsCount > 0) existing.connectionsCount = row.connectionsCount;
-  if (!existing.relationshipType && relationship) existing.relationshipType = relationship;
-  if (!existing.avatarUrl && row.avatarUrl.trim()) existing.avatarUrl = row.avatarUrl.trim();
-  if (!existing.targetCompany && row.targetCompany.trim()) existing.targetCompany = row.targetCompany.trim();
-  existing.isDecisionMaker = existing.isDecisionMaker || isDecisionMaker;
-  existing.isInternal = existing.isInternal || isInternalByRelationship || isInternalByTarget;
 
   if (interaction) {
-    const duplicate = existing.interactions.some(
+    const exists = person.interactions.some(
       (i) => i.postKey === interaction.postKey && i.reactionType === interaction.reactionType
     );
-    if (!duplicate) existing.interactions.push(interaction);
-  }
-  existing.engagementCount = existing.interactions.length > 0 ? existing.interactions.length : existing.engagementCount;
-}
-
-function parsePeopleTable(rows: unknown[], acc: ParseAccumulator): void {
-  let headerMap: Partial<Record<keyof RawPersonRow, number>> | null = null;
-  for (const rawRow of rows) {
-    const decoded = deepDecode(rawRow);
-    if (!Array.isArray(decoded)) continue;
-    const cells = decoded.map((cell) => deepDecode(cell));
-    const maybeHeader = buildHeaderMap(cells);
-    if (maybeHeader) {
-      headerMap = maybeHeader;
-      continue;
+    if (!exists) {
+      person.interactions.push(interaction);
+      acc.engagements.push({
+        postKey: interaction.postKey,
+        personSlug: slug,
+        engagementType: interaction.reactionType === 'COMMENT' ? 'comment' : 'reaction',
+        reactionType: interaction.reactionType,
+      });
     }
-    const base = headerMap ? rowFromHeadered(cells, headerMap) : rowFromArray(cells);
-    const row = applyCellHeuristics(base, cells);
-    const hasProfile = cells.some((cell) => typeof cell === 'string' && cell.includes('linkedin.com/in'));
-    if (!hasProfile && !row.fullName.trim() && !row.urn.trim()) continue;
-    mergePersonRow(acc, row);
+  }
+  person.engagementCount = Math.max(person.interactions.length, 1);
+}
+
+function ingestTable(rows: unknown[][], acc: ParseAccumulator): void {
+  if (rows.length === 0) return;
+  const headerMap = buildHeaderMap(rows[0]);
+  const dataRows = headerMap ? rows.slice(1) : rows;
+  for (const cells of dataRows) {
+    const row = headerMap ? rowFromHeadered(cells, headerMap) : rowFromArray(cells);
+    ingestRow(row, acc);
   }
 }
 
-function rowFromRecord(record: UnknownRecord): RawPersonRow {
-  return {
-    urn: pickString(record, ['profile_urn_id', 'profile_urn', 'urn_id', 'urn', 'person_urn', 'id']),
-    fullName: pickString(record, ['full_name', 'fullName', 'name', 'person_name', 'profile_name']),
-    firstName: pickString(record, ['first_name', 'firstName']),
-    lastName: pickString(record, ['last_name', 'lastName']),
+function looksLikePersonRecord(record: UnknownRecord): boolean {
+  const keys = Object.keys(record).map(normalizeKey);
+  const hasName =
+    keys.includes('fullname') || (keys.includes('firstname') && keys.includes('lastname'));
+  if (hasName) return true;
+  const linkedin = pickString(record, ['linkedin_url', 'linkedinurl', 'profile_url', 'profileurl']);
+  return /linkedin\.com\/in\//i.test(linkedin);
+}
+
+function looksLikePostRecord(record: UnknownRecord): boolean {
+  const keys = Object.keys(record).map(normalizeKey);
+  return keys.some((k) =>
+    ['shareurl', 'reactioncounter', 'commentcounter', 'repostcounter', 'commentary', 'parseddatetime', 'numreactions'].includes(k)
+  );
+}
+
+function looksLikeCompanyRecord(record: UnknownRecord): boolean {
+  const keys = Object.keys(record).map(normalizeKey);
+  return keys.some((k) =>
+    ['followercount', 'followerscount', 'employeecount', 'staffcount', 'tagline', 'industry', 'universalname'].includes(k)
+  );
+}
+
+function ingestPersonRecord(record: UnknownRecord, acc: ParseAccumulator): void {
+  const row: RawPersonRow = {
+    urn: pickString(record, ['profile_urn_id', 'profile_urn', 'urn_id', 'urn', 'person_urn', 'member_id', 'id']),
+    fullName: pickString(record, ['full_name', 'fullname', 'name', 'person_name', 'profile_name']),
+    firstName: pickString(record, ['first_name', 'firstname']),
+    lastName: pickString(record, ['last_name', 'lastname']),
     linkedinUrl: pickString(record, ['linkedin_url', 'linkedin_profile_url', 'profile_url', 'profile_link', 'linkedin']),
     headline: pickString(record, ['headline']),
     title: pickString(record, ['title', 'job_title', 'current_title', 'role', 'position']),
@@ -544,121 +486,99 @@ function rowFromRecord(record: UnknownRecord): RawPersonRow {
     targetCompany: pickString(record, ['target_company']),
     avatarUrl: pickString(record, ['avatar_url', 'avatar', 'profile_picture_url', 'profile_picture', 'profile_image', 'photo', 'picture', 'image_url']),
   };
+  ingestRow(row, acc);
 }
 
-function looksLikePostRecord(record: UnknownRecord): boolean {
-  const keys = Object.keys(record).map(normalizeKey);
-  return keys.some((k) =>
-    ['shareurl', 'reactioncounter', 'commentcounter', 'repostcounter', 'commentary', 'parseddatetime', 'numreactions', 'numcomments'].includes(k)
-  );
-}
-
-function looksLikePersonRecord(record: UnknownRecord): boolean {
-  const keys = Object.keys(record).map(normalizeKey);
-  const hasProfile = keys.some((k) => ['linkedinurl', 'profileurl', 'linkedinprofileurl', 'profilelink'].includes(k));
-  const hasName = keys.some((k) => ['fullname', 'firstname', 'lastname'].includes(k));
-  const hasContext = keys.some((k) => ['headline', 'senioritylevel', 'companyname', 'reactiontype', 'connectiondegree'].includes(k));
-  return hasProfile || (hasName && hasContext);
-}
-
-function looksLikeCompanyRecord(record: UnknownRecord): boolean {
-  const keys = Object.keys(record).map(normalizeKey);
-  const companyish = keys.some((k) =>
-    ['tagline', 'industry', 'industries', 'employeecount', 'staffcount', 'universalname', 'followercount'].includes(k)
-  );
-  const personish = keys.some((k) =>
-    ['firstname', 'lastname', 'headline', 'senioritylevel', 'reactiontype', 'connectiondegree'].includes(k)
-  );
-  return companyish && !personish;
+function ingestPostRecord(record: UnknownRecord, acc: ParseAccumulator): void {
+  for (const post of parsePosts([record])) {
+    if (!acc.postsById.has(post.id)) acc.postsById.set(post.id, post);
+  }
 }
 
 function walk(value: unknown, acc: ParseAccumulator, depth: number): void {
-  if (depth > 8) return;
+  if (depth > 10) return;
   const decoded = deepDecode(value);
   if (Array.isArray(decoded)) {
-    const decodedItems = decoded.map((item) => deepDecode(item));
-    if (decodedItems.some((item) => Array.isArray(item))) {
-      parsePeopleTable(decodedItems, acc);
-      for (const item of decodedItems) {
-        if (!Array.isArray(item)) walk(item, acc, depth + 1);
-      }
+    if (decoded.length > 0 && decoded.every((row) => Array.isArray(row))) {
+      ingestTable(decoded as unknown[][], acc);
       return;
     }
-    const records = decodedItems.filter(isRecord);
-    if (records.length > 0) {
-      if (records.some(looksLikePostRecord)) {
-        for (const post of parsePosts(decodedItems)) {
-          if (!acc.postsById.has(post.id)) acc.postsById.set(post.id, post);
-        }
-        return;
-      }
-      if (records.some(looksLikePersonRecord)) {
-        for (const record of records) {
-          const row = applyCellHeuristics(rowFromRecord(record), Object.values(record));
-          mergePersonRow(acc, row);
-        }
-        return;
-      }
+    for (const entry of decoded) {
+      walk(entry, acc, depth + 1);
     }
-    for (const item of decodedItems) walk(item, acc, depth + 1);
     return;
   }
-  if (isRecord(decoded)) {
-    if (!acc.company && looksLikeCompanyRecord(decoded)) {
-      const company = parseCompanyProfile(decoded);
-      if (company) acc.company = company;
-    }
-    for (const nested of Object.values(decoded)) {
-      walk(nested, acc, depth + 1);
-    }
+  if (!isRecord(decoded)) return;
+  if (looksLikePersonRecord(decoded)) {
+    ingestPersonRecord(decoded, acc);
+    return;
+  }
+  if (looksLikePostRecord(decoded)) {
+    ingestPostRecord(decoded, acc);
+    return;
+  }
+  if (!acc.company && looksLikeCompanyRecord(decoded)) {
+    const company = parseCompanyProfile(decoded);
+    if (company) acc.company = company;
+  }
+  for (const entry of Object.values(decoded)) {
+    walk(entry, acc, depth + 1);
   }
 }
 
-function safeTime(value: string): number {
-  const time = new Date(value).getTime();
-  return Number.isNaN(time) ? 0 : time;
-}
-
+/**
+ * Parses an intelligence workflow payload of unknown shape into DashboardData.
+ * Handles JSON-encoded strings, nested containers, spreadsheet-style row arrays
+ * and keyed record objects for company, posts and people.
+ */
 export function parseWorkflowResponse(raw: unknown): DashboardData {
-  const acc: ParseAccumulator = { company: null, postsById: new Map(), peopleBySlug: new Map() };
-  walk(raw, acc, 0);
+  const acc: ParseAccumulator = {
+    company: null,
+    postsById: new Map<string, PostItem>(),
+    peopleBySlug: new Map<string, Person>(),
+    engagements: [],
+  };
+
+  const decoded = deepDecode(raw);
+
+  if (isRecord(decoded)) {
+    const companyRaw = decoded.company ?? decoded.company_profile ?? decoded.companyProfile;
+    if (companyRaw !== undefined) {
+      const company = parseCompanyProfile(companyRaw);
+      if (company) acc.company = company;
+    }
+    const postsRaw = decoded.posts ?? decoded.post_list ?? decoded.postList;
+    if (postsRaw !== undefined) {
+      for (const post of parsePosts(postsRaw)) {
+        if (!acc.postsById.has(post.id)) acc.postsById.set(post.id, post);
+      }
+    }
+  }
+
+  walk(decoded, acc, 0);
 
   const posts = Array.from(acc.postsById.values());
   const people = Array.from(acc.peopleBySlug.values());
 
-  const postsByActivity = new Map<string, PostItem>();
+  const postByActivity = new Map<string, PostItem>();
   for (const post of posts) {
-    if (post.activityKey) postsByActivity.set(post.activityKey, post);
+    postByActivity.set(post.activityKey, post);
   }
-
-  const companyName = acc.company?.name ?? '';
-  const engagements: EngagementRecord[] = [];
-
   for (const person of people) {
-    if (companyName && sameCompany(person.companyName, companyName)) {
-      person.isInternal = true;
-    }
-    if (person.interactions.length > 0) {
-      person.engagementCount = person.interactions.length;
-    } else if (person.engagementCount === 0) {
-      person.engagementCount = 1;
-    }
     for (const interaction of person.interactions) {
-      const post = postsByActivity.get(interaction.postKey);
+      const post = postByActivity.get(interaction.postKey);
       if (post && !post.engagerSlugs.includes(person.slug)) {
         post.engagerSlugs.push(person.slug);
       }
-      engagements.push({
-        postKey: interaction.postKey,
-        personSlug: person.slug,
-        engagementType: interaction.reactionType === 'COMMENT' ? 'comment' : 'reaction',
-        reactionType: interaction.reactionType,
-      });
     }
   }
 
-  posts.sort((a, b) => safeTime(b.parsedDatetime) - safeTime(a.parsedDatetime));
-  people.sort((a, b) => b.engagementCount - a.engagementCount || a.fullName.localeCompare(b.fullName));
+  people.sort((a, b) => b.engagementCount - a.engagementCount);
 
-  return { company: acc.company, posts, people, engagements };
+  return {
+    company: acc.company,
+    posts,
+    people,
+    engagements: acc.engagements,
+  };
 }

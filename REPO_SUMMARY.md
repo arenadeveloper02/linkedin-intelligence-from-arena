@@ -1,22 +1,22 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T05:52:20.923Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T10:16:59.619Z.
 
 ## Overview
 
-LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company activity.
+Two-step LinkedIn intelligence app: search people or companies, select an entity, and explore a 4-tab engagement intelligence dashboard.
 
 **Repository:** `linkedin-intelligence-from-arena`  
-**File count:** 37
+**File count:** 42
 
 ## Features
 
-- Company overview with expandable description (view more / view less)
-- Robust workflow response parsing: locations, countries, followers, connections, degrees
-- Deduplicated people list with working country/city/degree filters
-- Hide same-company employees filter in People tab
-- Decision Maker badge restyled with brand color
-- Post links always resolve to the real LinkedIn post URL
+- Entity search with Personal/Company toggle
+- Search results grid with verified/premium badges
+- Select & Analyze flow triggering the intelligence workflow
+- Reusable 4-tab intelligence dashboard (Overview, People, Companies, Posts)
+- Person, company and post detail drawers/modals
+- Back to Search navigation
 
 ## Tech Stack
 
@@ -53,18 +53,22 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 
 ### API routes
 
+- `app/api/analyze/route.ts`
 - `app/api/intelligence/route.ts`
+- `app/api/search/route.ts`
 
 ### Components
 
 - `components/CompaniesTab.tsx`
 - `components/CompanyDrawer.tsx`
 - `components/DashboardClient.tsx`
+- `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
 - `components/PersonDrawer.tsx`
 - `components/PostModal.tsx`
 - `components/PostsTab.tsx`
+- `components/SearchScreen.tsx`
 - `components/Topbar.tsx`
 - `components/Widgets.tsx`
 - `components/arena-email-provider.tsx`
@@ -76,6 +80,7 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 - `lib/arena-email.ts`
 - `lib/parse.ts`
 - `lib/prisma.ts`
+- `lib/search-parse.ts`
 - `lib/types.ts`
 - `lib/utils.ts`
 - `prisma/schema.prisma`
@@ -102,7 +107,9 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 - `README.md`
 - `REPO_SUMMARY.md`
 - `app/access-denied/page.tsx`
+- `app/api/analyze/route.ts`
 - `app/api/intelligence/route.ts`
+- `app/api/search/route.ts`
 - `app/arena-ds-tokens.css`
 - `app/error.tsx`
 - `app/globals.css`
@@ -112,11 +119,13 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 - `components/CompaniesTab.tsx`
 - `components/CompanyDrawer.tsx`
 - `components/DashboardClient.tsx`
+- `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
 - `components/PersonDrawer.tsx`
 - `components/PostModal.tsx`
 - `components/PostsTab.tsx`
+- `components/SearchScreen.tsx`
 - `components/Topbar.tsx`
 - `components/Widgets.tsx`
 - `components/arena-email-provider.tsx`
@@ -125,6 +134,7 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 - `lib/arena-email.ts`
 - `lib/parse.ts`
 - `lib/prisma.ts`
+- `lib/search-parse.ts`
 - `lib/types.ts`
 - `lib/utils.ts`
 - `middleware.ts`
@@ -138,6 +148,120 @@ LinkedIn Intelligence — engagement intelligence dashboard for LinkedIn company
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T05:52:20.923Z
-- **Request:** thing to fix:
-1. The description of the company is elipsed if its huge, add a view (more, less) 2. In the overview tab, top location section is empty, pls check that 3. in the people tab remove Hide internal employees functionlity is not working, lets say if the person belongs to the same company hide the person 4. peoples card locations are missing of the persons 5. People tab for Decision makers: change the badge color  6. People’s tab, view post link should point to the actual LinkedIn post not the https://linkedin-intelligence-from-arena.vercel.app/Employee 7. peoples tab: Person details Followers & Connections & location are empty 8. the filter, people search is giving me the duplicate data is should fix, filters dropdowns like all countries, cities, degree are empty.
+- **Updated at:** 2026-08-20T10:16:59.619Z
+- **Request:** need to update the entire ui:
+Here is the architecture and prompt specification to rebuild the UI into a **Two-Step Search & Intelligence Flow**.
+
+The prompt separates the previously built **Dashboard UI** into a standalone, reusable view component (`LinkedInIntelligenceDashboard`) and introduces a new **Search & Entity Selection Step** (`SearchScreen`).
+
+---
+
+### UI Architecture Prompt: LinkedIn Intelligence Search & Intelligence App
+
+You are tasked with rebuilding the **LinkedIn Intelligence** application into a 2-step workflow:
+
+1. **Search & Entity Selection View**
+2. **Detailed Intelligence Dashboard View** (Encapsulate the previously created 4-tab dashboard UI into a reusable component)
+
+---
+
+### Step 1: Initial Search Screen
+
+#### **1. Header & Access Guard**
+
+* Extract the user `email` from the URL parameter `?email=<user_email>`.
+* If `email` is missing, render an **Access Denied** message.
+* Render the application topbar with the user's details and theme toggle.
+
+#### **2. Search Form UI**
+
+Build a search card at the top of the page with the following controls:
+
+* **Entity Type Selector (Radio Buttons)**:
+* `Personal` (`isCompany: "false"`) [Default]
+* `Company` (`isCompany: "true"`)
+
+
+* **Search Input & Action Button**:
+* Input field with placeholder: *"Search for a person or company on LinkedIn..."*
+* **Search** button (triggers API 1).
+* Show a loading spinner during execution.
+
+
+
+#### **3. Search API Call (API 1 - Entity Search)**
+
+* **Endpoint**: `POST [https://agent.thearena.ai/api/workflows/970f3a69-e05e-4b68-b90c-4887a1e3cd2e/execute](https://agent.thearena.ai/api/workflows/970f3a69-e05e-4b68-b90c-4887a1e3cd2e/execute)`
+* **Headers**:
+* `X-API-Key`: `sk-sim-g6HxaMjNLmbQ-iqVeQnYIK3nuiyogqPs`
+* `Content-Type`: `application/json`
+
+
+* **Request Body**:
+```json
+{
+  "searchInput": "<USER_INPUT>",
+  "isCompany": "<"true" | "false">"
+}
+
+```
+
+
+
+#### **4. Search Results Grid**
+
+Render the returned `results` array below the search bar in a clean card grid format:
+
+* **People Card Data Mapping**:
+* **Avatar**: `profile_picture_url` (Fallback to name initials gradient if `null`).
+* **Title / Name**: `name`
+* **Headline**: `headline`
+* **Location**: `location`
+* **Badges**: Show `verified` badge if `true`, show `premium` badge if `true`.
+* **Followers**: `followers_count` (if available).
+* **Action**: Render a *"Select & Analyze"* button on card click.
+
+
+* **Company Card Data Mapping**:
+* **Logo**: `logo` (Fallback to company name initial).
+* **Title / Name**: `name`
+* **Industry**: `industry` (Show `N/A` if `"undefined"` or `null`).
+* **Location**: `location`
+* **Followers**: `followers_count`
+* **Action**: Render a *"Select & Analyze"* button on card click.
+
+
+
+---
+
+### Step 2: Entity Selection & Dashboard Loading
+
+#### **1. Selection API Call (API 2 - Trigger Intelligence Workflow)**
+
+When a user clicks on any Person or Company card from the search results, transition the page into a full-screen loading state (*"Gathering LinkedIn Intelligence for [Selected Name]..."*) and execute API 2.
+
+* **Endpoint**: `POST [https://agent.thearena.ai/api/workflows/3909ec63-faf0-4d69-abd1-499bc7b158d0/execute](https://agent.thearena.ai/api/workflows/3909ec63-faf0-4d69-abd1-499bc7b158d0/execute)`
+* **Headers**:
+* `X-API-Key`: `sk-sim-g6HxaMjNLmbQ-iqVeQnYIK3nuiyogqPs`
+* `Content-Type`: `application/json`
+
+
+* **Request Body**:
+```json
+{
+  "name": "<SELECTED_ITEM_NAME>",
+  "profile_url": "<SELECTED_ITEM_PROFILE_URL>",
+  "account_id": "<SELECTED_ITEM_ACCOUNT_ID_OR_ID>",
+  "slug": "<SELECTED_ITEM_COMPANY_SLUG_OR_PUBLIC_IDENTIFIER>",
+  "email": "<EMAIL_FROM_SEARCH_PARAMS>"
+}
+
+```
+
+
+
+#### **2. Transition to Dashboard**
+
+* Upon receiving a `success: true` response from API 2, hide the Search UI and mount the reusable **`LinkedInIntelligenceDashboard`** component.
+* Pass the returned intelligence payload (`output.rows[0].output`) to populate the dashboard tabs (**Overview**, **People**, **Companies**, **Posts**) and sliding detail drawers.
+* Provide a **"← Back to Search"** button in the header toolbar to allow users to return to the Search Screen at any time.

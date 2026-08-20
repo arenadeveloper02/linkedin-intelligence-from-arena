@@ -1,18 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { DashboardData, TabKey } from '@/lib/types';
+import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import type { DashboardData, SearchResultItem } from '@/lib/types';
 import { parseWorkflowResponse } from '@/lib/parse';
-import { buildCompanyAggregates } from '@/lib/utils';
+import { extractIntelligencePayload } from '@/lib/search-parse';
 import Topbar from '@/components/Topbar';
-import OverviewTab from '@/components/OverviewTab';
-import PeopleTab from '@/components/PeopleTab';
-import CompaniesTab from '@/components/CompaniesTab';
-import PostsTab from '@/components/PostsTab';
-import PersonDrawer from '@/components/PersonDrawer';
-import CompanyDrawer from '@/components/CompanyDrawer';
-import PostModal from '@/components/PostModal';
-import { DashboardSkeleton } from '@/components/Widgets';
+import SearchScreen from '@/components/SearchScreen';
+import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
 
 interface DashboardClientProps {
   email: string;
@@ -20,53 +15,49 @@ interface DashboardClientProps {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'people', label: 'People' },
-  { key: 'companies', label: 'Companies' },
-  { key: 'posts', label: 'Posts' },
-];
+type ViewState = 'search' | 'loading' | 'dashboard';
 
 export default function DashboardClient({ email }: DashboardClientProps) {
   const isValidEmail = EMAIL_REGEX.test(email.trim());
-  const [tab, setTab] = useState<TabKey>('overview');
-  const [loading, setLoading] = useState<boolean>(isValidEmail);
-  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<ViewState>('search');
   const [data, setData] = useState<DashboardData | null>(null);
-  const [selectedPersonSlug, setSelectedPersonSlug] = useState<string | null>(null);
-  const [selectedCompanyName, setSelectedCompanyName] = useState<string | null>(null);
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<SearchResultItem | null>(null);
 
-  const fetchData = useCallback(async () => {
-    if (!isValidEmail) return;
-    setLoading(true);
+  const analyze = async (item: SearchResultItem) => {
+    setSelected(item);
     setError(null);
+    setView('loading');
     try {
-      const res = await fetch('/api/intelligence', {
+      const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({
+          name: item.name,
+          profile_url: item.profileUrl,
+          account_id: item.id,
+          slug: item.slug,
+          email: email.trim(),
+        }),
       });
       const json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
       if (!res.ok || !json.success) {
         setError(json.error ?? `Request failed with status ${res.status}.`);
-        setData(null);
-      } else {
-        setData(parseWorkflowResponse(json.data));
+        setView('search');
+        return;
       }
+      const payload = extractIntelligencePayload(json.data);
+      let parsed = parseWorkflowResponse(payload);
+      if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
+        parsed = parseWorkflowResponse(json.data);
+      }
+      setData(parsed);
+      setView('dashboard');
     } catch {
       setError('Unable to reach the intelligence service. Please try again.');
-      setData(null);
-    } finally {
-      setLoading(false);
+      setView('search');
     }
-  }, [email, isValidEmail]);
-
-  useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
-
-  const companyAggregates = useMemo(() => (data ? buildCompanyAggregates(data.people) : []), [data]);
+  };
 
   if (!isValidEmail) {
     return (
@@ -82,89 +73,41 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     );
   }
 
-  const selectedPerson =
-    data && selectedPersonSlug ? data.people.find((p) => p.slug === selectedPersonSlug) ?? null : null;
-  const selectedCompany = selectedCompanyName
-    ? companyAggregates.find((c) => c.name === selectedCompanyName) ?? null
-    : null;
-  const selectedPost = data && selectedPostId ? data.posts.find((p) => p.id === selectedPostId) ?? null : null;
-  const postEngagers =
-    data && selectedPost ? data.people.filter((p) => selectedPost.engagerSlugs.includes(p.slug)) : [];
-
-  const openCompanyFromOverview = (name: string) => {
-    setTab('companies');
-    setSelectedCompanyName(name);
-  };
-
   return (
     <div className="min-h-screen bg-grey-50">
-      <Topbar email={email.trim()} loading={loading} onRefresh={() => void fetchData()} />
-      <div className="sticky top-16 z-20 border-b border-grey-200 bg-white">
-        <div className="mx-auto flex max-w-7xl gap-1 px-4 sm:px-6">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={`border-b-2 px-4 py-3 text-sm font-medium transition duration-200 ${
-                tab === t.key ? 'border-brand-600 text-brand-600' : 'border-transparent text-grey-600 hover:text-grey-900'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+      <Topbar
+        email={email.trim()}
+        loading={view === 'loading'}
+        onBack={
+          view === 'dashboard'
+            ? () => {
+                setView('search');
+                setData(null);
+              }
+            : undefined
+        }
+        onRefresh={view === 'dashboard' && selected ? () => void analyze(selected) : undefined}
+      />
+      <div className={view === 'search' ? '' : 'hidden'}>
+        <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
+          {error && (
+            <div className="mb-4 rounded-xl border border-error-300 bg-error-50 px-4 py-3 text-sm text-error-700">
+              {error}
+            </div>
+          )}
+          <SearchScreen onSelect={(item) => void analyze(item)} />
+        </main>
       </div>
-      <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
-        {loading ? (
-          <DashboardSkeleton />
-        ) : error ? (
-          <div className="rounded-xl border border-error-300 bg-error-50 p-8 text-center">
-            <h2 className="text-base font-semibold text-error-700">Unable to load intelligence data</h2>
-            <p className="mt-2 text-sm text-grey-600">{error}</p>
-            <button
-              type="button"
-              onClick={() => void fetchData()}
-              className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-brand-600 px-4 text-sm font-medium text-white transition duration-200 hover:bg-brand-700 active:bg-brand-800 focus:outline-none focus:ring-4 focus:ring-brand-600/30"
-            >
-              Try again
-            </button>
-          </div>
-        ) : data ? (
-          tab === 'overview' ? (
-            <OverviewTab data={data} companies={companyAggregates} onSelectCompany={openCompanyFromOverview} />
-          ) : tab === 'people' ? (
-            <PeopleTab
-              people={data.people}
-              companyName={data.company?.name ?? ''}
-              onSelectPerson={setSelectedPersonSlug}
-            />
-          ) : tab === 'companies' ? (
-            <CompaniesTab companies={companyAggregates} onSelectCompany={setSelectedCompanyName} />
-          ) : (
-            <PostsTab
-              posts={data.posts}
-              people={data.people}
-              authorName={data.company?.name ?? 'Company'}
-              onSelectPost={setSelectedPostId}
-            />
-          )
-        ) : null}
-      </main>
-      {selectedPerson && data && (
-        <PersonDrawer person={selectedPerson} posts={data.posts} onClose={() => setSelectedPersonSlug(null)} />
+      {view === 'loading' && (
+        <main className="flex min-h-[70vh] flex-col items-center justify-center px-4 text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
+          <h2 className="mt-4 text-base font-semibold text-grey-900">
+            Gathering LinkedIn Intelligence{selected ? ` for ${selected.name}` : ''}…
+          </h2>
+          <p className="mt-1 text-sm text-grey-500">This can take a moment while we analyze engagement data.</p>
+        </main>
       )}
-      {selectedCompany && (
-        <CompanyDrawer
-          company={selectedCompany}
-          onClose={() => setSelectedCompanyName(null)}
-          onSelectPerson={(slug) => {
-            setSelectedCompanyName(null);
-            setSelectedPersonSlug(slug);
-          }}
-        />
-      )}
-      {selectedPost && <PostModal post={selectedPost} engagers={postEngagers} onClose={() => setSelectedPostId(null)} />}
+      {view === 'dashboard' && data && <LinkedInIntelligenceDashboard data={data} />}
     </div>
   );
 }

@@ -83,3 +83,18 @@ export interface DistributionItem {
   label: string;
   count: number;
 }
+
+export interface SearchResultItem {
+  id: string;
+  name: string;
+  headline: string;
+  industry: string;
+  location: string;
+  followersCount: number;
+  avatarUrl: string;
+  profileUrl: string;
+  slug: string;
+  verified: boolean;
+  premium: boolean;
+  isCompany: boolean;
+}
