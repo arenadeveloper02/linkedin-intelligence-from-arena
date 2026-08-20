@@ -1,13 +1,14 @@
 # linkedin-intelligence
 
-Added an access guard for the `email` search parameter in middleware (falls back to Access Denied when neither emailId nor email is present) and a Company vs Personal type badge on History cards derived from the record payload. Files changed: middleware.ts (accepts `email` query param alongside `emailId`, persists it to the arena cookie, denies access when both are missing), lib/types.ts (added `isCompany: boolean` to HistoryEntry), lib/history-parse.ts (derives entity type from is_company/type fields, company_details/company_profile sections, and person-name fallbacks), components/HistoryPageClient.tsx and components/HistoryView.tsx (render the 🏢 Company / 👤 Personal badge on each card header). prisma/schema.prisma echoed unchanged; app/not-found.tsx included per structure requirements.
+Edited linkedin-intelligence-from-arena. Changes: (1) prisma/schema.prisma — restored the live FetchLog.updatedAt column (DateTime @updatedAt @default(now())) that the deploy error flagged as being dropped (potential_dataloss on 38 rows); (2) middleware.ts — access guard now also reads the `email` search parameter (in addition to `emailId` and the arena_email_id cookie) and rewrites to /access-denied when missing/empty, persisting the value in the cookie; (3) components/HistoryDrawer.tsx — added the Company vs Personal type badge (🏢 Company / 👤 Personal) on each history card header, derived from entry.isCompany which lib/history-parse.ts already computes from is_company/type/company_details payload attributes. HistoryPageClient.tsx and HistoryView.tsx already render this badge, so only the drawer needed it. lib/actions.ts and lib/types.ts are echoed unchanged per schema-return policy.
 
 ## Features
 
-- Access Denied guard honoring the `email` search parameter (in addition to emailId) via middleware rewrite
-- Company vs Personal entity type badge on History cards
-- History payload type derivation from is_company / type / company_details attributes
-- Existing Arena email gate, cookie persistence, and iframe headers preserved
+- Arena email gate: access denied when email/emailId is missing from the URL and cookie
+- History cards show Company vs Personal entity type badge
+- LinkedIn engagement intelligence dashboard
+- Analysis history with dashboard reload
+- Fetch logging to Neon Postgres via Prisma
 
 ## Tech Stack
 

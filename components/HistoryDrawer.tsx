@@ -59,7 +59,16 @@ export default function HistoryDrawer({ entries, loading, error, onClose, onSele
                       {initialsOf(entry.title || '?')}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-grey-900">{entry.title}</span>
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="block truncate text-sm font-semibold text-grey-900">{entry.title}</span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                            entry.isCompany ? 'bg-brand-50 text-brand-700' : 'bg-purple-50 text-purple-700'
+                          }`}
+                        >
+                          {entry.isCompany ? '🏢 Company' : '👤 Personal'}
+                        </span>
+                      </span>
                       {entry.subtitle && (
                         <span className="mt-0.5 block truncate text-xs text-grey-500">{entry.subtitle}</span>
                       )}
