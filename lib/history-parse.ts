@@ -331,6 +331,51 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
     if (followersCount === 0) {
       followersCount = deepFindNumber(payload, ['followers_count', 'follower_count', 'followers', 'followerCount']);
     }
+    // Entity type detection: distinguishes Company vs Personal history entries.
+    // Priority: explicit `is_company` / `isCompany` flags, then `type`-style
+    // string fields, then presence of company-specific payload sections
+    // (`company_details` / `company_profile`), then person-name indicators,
+    // finally falling back to whether a company slug was found.
+    let entityIsCompany: boolean | null = null;
+    for (const source of detailSources) {
+      const flag = source['is_company'] ?? source['isCompany'];
+      if (typeof flag === 'boolean') {
+        entityIsCompany = flag;
+        break;
+      }
+      if (flag === 'true' || flag === 1 || flag === '1') {
+        entityIsCompany = true;
+        break;
+      }
+      if (flag === 'false' || flag === 0 || flag === '0') {
+        entityIsCompany = false;
+        break;
+      }
+    }
+    if (entityIsCompany === null) {
+      const typeStr = pickAcross(['type', 'entity_type', 'entityType', 'profile_type', 'profileType', 'record_type', 'recordType']);
+      if (typeStr) {
+        if (/company|organization|organisation|business/i.test(typeStr)) {
+          entityIsCompany = true;
+        } else if (/person|personal|people|individual|member/i.test(typeStr)) {
+          entityIsCompany = false;
+        }
+      }
+    }
+    if (entityIsCompany === null) {
+      const companySectionKeys = ['company_details', 'companyDetails', 'company_profile', 'companyProfile'];
+      const hasCompanySection =
+        'company_details' in record ||
+        (isRecord(payload) && companySectionKeys.some((key) => key in (payload as UnknownRecord)));
+      if (hasCompanySection) entityIsCompany = true;
+    }
+    if (entityIsCompany === null) {
+      const personIndicator =
+        pickAcross(['first_name', 'firstName', 'last_name', 'lastName']) ||
+        deepFindString(payload, ['first_name', 'firstName', 'last_name', 'lastName']);
+      if (personIndicator) entityIsCompany = false;
+    }
+    const isCompany = entityIsCompany ?? Boolean(companySlug);
     const rawId = pickString(record, ['id', 'row_id', 'rowId', 'urn']);
     entries.push({
       id: rawId ? `${rawId}-${index}` : `history-${index}`,
@@ -344,6 +389,7 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       location,
       followersCount,
       companySlug,
+      isCompany,
     });
   });
   return entries;

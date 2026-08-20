@@ -111,4 +111,5 @@ export interface HistoryEntry {
   location: string;
   followersCount: number;
   companySlug: string;
+  isCompany: boolean;
 }

@@ -75,6 +75,13 @@ export default function HistoryView({ entries, loading, error, onSelect }: Histo
                       <p className="truncate text-sm font-semibold text-grey-900">
                         {decodeUnicodeEscapes(entry.title) || 'Unknown'}
                       </p>
+                      <span
+                        className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                          entry.isCompany ? 'bg-brand-50 text-brand-700' : 'bg-purple-50 text-purple-700'
+                        }`}
+                      >
+                        {entry.isCompany ? '🏢 Company' : '👤 Personal'}
+                      </span>
                       {entry.companySlug && (
                         <span className="inline-flex items-center rounded-full bg-grey-50 px-1.5 py-0.5 text-[10px] font-medium text-grey-600">
                           {entry.companySlug}
