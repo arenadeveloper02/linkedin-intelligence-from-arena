@@ -1,22 +1,21 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-20T11:27:56.555Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-20T11:30:03.515Z.
 
 ## Overview
 
-LinkedIn Intelligence — engagement intelligence dashboard with full-screen history view, graceful personal-profile error handling, and clean unicode rendering.
+LinkedIn Intelligence dashboard. This edit: (1) History now navigates to a dedicated /history page (app/history/page.tsx + components/HistoryPageClient.tsx) rendering grid cards styled like the search result cards, sourcing title/subtitle from company_details (company, alias, company_profile_url) via lib/history-parse.ts; DashboardClient's History button now routes to /history instead of opening the drawer. (2) Personal profile analysis failures now always show the clean fallback banner and reset loading (components/DashboardClient.tsx analyze error branch) and app/api/analyze/route.ts guards upstream JSON parsing so no unhandled exception hangs the flow. (3) components/PersonDrawer.tsx: tightened padding (p-5→p-4, mt-5→mt-4, mt-6→mt-5) and removed redundant Target company / Connection degree rows. (4) Added decodeUnicodeEscapes() in lib/utils.ts and applied it where post snippets and history titles render, so labels like '✍️ Enhanced Article' display the real emoji instead of raw \u270D escapes. prisma/schema.prisma is returned unchanged (FetchLog only, no column edits).
 
 **Repository:** `linkedin-intelligence-from-arena`  
-**File count:** 45
+**File count:** 46
 
 ## Features
 
-- Full-screen history page view with visual cards mapped from company/profile details
-- History cards match Select & Analyze card design with hover behaviors
-- Clicking a history card loads its dataset into the dashboard tabs
-- Graceful 500 error handling for personal profile analysis with friendly banner
-- Personal profile detail rendering without broken images or undefined labels
-- Unicode escape sequence decoding for post text and labels (e.g. Enhanced Article ✍️)
+- Search LinkedIn companies and people
+- Engagement intelligence dashboard with Overview, People, Companies and Posts tabs
+- Dedicated History page with grid cards that reopen past dashboards
+- Graceful fallback messaging for personal profile analysis failures
+- Unicode-safe label rendering for post content
 
 ## Tech Stack
 
@@ -34,6 +33,7 @@ LinkedIn Intelligence — engagement intelligence dashboard with full-screen his
 
 - `/` — `app/page.tsx`
 - `/access-denied` — `app/access-denied/page.tsx`
+- `/history` — `app/history/page.tsx`
 
 ## Database Models
 
@@ -47,6 +47,7 @@ LinkedIn Intelligence — engagement intelligence dashboard with full-screen his
 - `app/arena-ds-tokens.css`
 - `app/error.tsx`
 - `app/globals.css`
+- `app/history/page.tsx`
 - `app/layout.tsx`
 - `app/not-found.tsx`
 - `app/page.tsx`
@@ -63,7 +64,7 @@ LinkedIn Intelligence — engagement intelligence dashboard with full-screen his
 - `components/CompanyDrawer.tsx`
 - `components/DashboardClient.tsx`
 - `components/HistoryDrawer.tsx`
-- `components/HistoryView.tsx`
+- `components/HistoryPageClient.tsx`
 - `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
@@ -116,6 +117,7 @@ LinkedIn Intelligence — engagement intelligence dashboard with full-screen his
 - `app/arena-ds-tokens.css`
 - `app/error.tsx`
 - `app/globals.css`
+- `app/history/page.tsx`
 - `app/layout.tsx`
 - `app/not-found.tsx`
 - `app/page.tsx`
@@ -123,7 +125,7 @@ LinkedIn Intelligence — engagement intelligence dashboard with full-screen his
 - `components/CompanyDrawer.tsx`
 - `components/DashboardClient.tsx`
 - `components/HistoryDrawer.tsx`
-- `components/HistoryView.tsx`
+- `components/HistoryPageClient.tsx`
 - `components/LinkedInIntelligenceDashboard.tsx`
 - `components/OverviewTab.tsx`
 - `components/PeopleTab.tsx`
@@ -154,52 +156,36 @@ LinkedIn Intelligence — engagement intelligence dashboard with full-screen his
 
 ## Latest Change
 
-- **Updated at:** 2026-08-20T11:27:56.555Z
+- **Updated at:** 2026-08-20T11:30:03.515Z
 - **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 
-#### **Changes to implement:**
+**Changes to implement:**
 
-1. **History View Page Refactor**:
-* Replace the existing slide-over drawer modal for **History** with a dedicated full-screen / sub-route page view.
-* Render history records returned by the History API (`POST [https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute](https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute)`) as visual cards.
-* Map title, logo, headline/tagline, and metadata for each history card directly from the `company_details` (or profile details) object within each row.
-* Match the card design, structure, and hover behaviors to the existing *"Select & Analyze"* search result cards, with slight visual adaptations suitable for historical records.
-* Clicking a history card must load its underlying dataset (`output`) into the dashboard component view (Overview, People, Companies, Posts tabs).
+1. **History View Navigation & Card UI:**
+* Instead of opening in a drawer or modal, navigate to a dedicated **History Page** upon clicking the **History** button.
+* On the History Page, render historical entries as visual grid cards using the data from the `company_details` object (e.g., `company`, `alias`, `company_profile_url`).
+* Reuse and adapt the existing card component styling from the "Select & Analyze" search result cards, adding an action button to select and open the corresponding dashboard view for that history entry.
 
 
-2. **Personal Profile Analysis Error Handling & Graceful Fallback**:
-* Handle the 500 error returned by `/api/analyze` when selecting a Personal profile:
-```json
-{"success":false,"error":"Intelligence service responded with status 500."}
-
-```
+2. **Personal Profile Analysis Fallback & Handling:**
+* Update the `/api/analyze` request handler and frontend execution flow when analyzing a **Personal Profile**.
+* If the analysis endpoint returns an error (e.g., `{"success":false,"error":"Intelligence service responded with status 500."}`), catch the exception gracefully without throwing an unhandled UI crash or hanging the loading state.
+* Display a clean, prominent notification banner/toast: `"Unable to process personal profile intelligence at this time. Please select a Company profile or try again later."` and cleanly reset the loading indicators.
 
 
-* Intercept HTTP status 500 responses on personal profile analysis triggers gracefully without unmounting components or leaving the UI in an infinite loading state.
-* Display a user-friendly error notification banner or toast message: *"Unable to process personal profile intelligence at this time. Please select a Company profile or try again later."*
-* Reset loading indicators immediately upon catching this error.
+3. **Personal Profile Details View Tweaks:**
+* Adjust the layout and spacing on the Personal Profile details screen by reducing redundant metadata fields and tightening container margins/padding slightly.
 
 
-3. **Personal Profile Details View Adjustments**:
-* Tweaked layout rendering specifically for personal profile detail cards and drawers: adjust missing data fields (such as missing company logo, follower count, or industry) so they render gracefully without broken image placeholders or `undefined` labels. Apply minor styling adjustments strictly where necessary to accommodate personal profile schemas.
-
-
-4. **Unicode Escape Sequence Fix**:
-* Fix the "Enhanced Article" label so it does not display the raw Unicode escape sequence (`\u270D`). Render the actual character properly (`✍️`) or display plain text "Enhanced Article" ensuring correct encoding/decoding across source files, JSON, and template definitions.
+4. **Unicode Escape Sequence Fix:**
+* Fix the `"Enhanced Article"` label so it does not display the raw Unicode escape sequence (`\u270D`). Render the actual emoji character properly (`✍️ Enhanced Article`) or display plain text `"Enhanced Article"` ensuring correct string encoding/decoding across source templates and JSON definitions.
 
 
 
----
-
-#### **Constraints:**
+**Constraints:**
 
 * Only touch the files/functions directly related to the points above.
 * Do not change variable names, code style, or structure outside the scope of these changes.
 * Do not add extra features, optimizations, or refactors that weren't requested.
 * If a change requires touching a shared/common file, make the minimal edit needed and leave everything else untouched.
-
----
-
-#### **Reporting Requirement:**
-
-After implementing, list exactly which files and lines were changed, and explain why each change was made.
+* After implementing, list exactly which files and lines were changed, and why.
