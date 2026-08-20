@@ -209,3 +209,15 @@ You are tasked with updating the **LinkedIn Intelligence** web application. Main
 * Catch 500 HTTP errors gracefully during the analysis trigger call.
 * If the downstream endpoint fails, fall back to displaying a user-friendly error notification banner: *"Unable to process personal profile intelligence at this time. Please select a Company profile or try again later."*
 * Ensure loading states reset correctly without crashing the UI or blocking navigation.
+
+
+model FetchLog {
+  id        String   @id @default(cuid())
+  email     String
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+}
+
+Dont drop the updatedAt DateTime @default(now()) or any other column
