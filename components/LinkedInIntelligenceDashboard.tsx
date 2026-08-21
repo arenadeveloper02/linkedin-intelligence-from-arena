@@ -50,11 +50,18 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
     setSelectedCompanyName(name);
   };
 
-  // Entity profile summary header: prefer the parsed company_profile, fall back to profile_details.
+  // Selected profile header (rendered above the sticky tab bar): prefer the parsed
+  // company_profile, fall back to profile_details captured from the Analyze/History response.
   const headerName = data.company?.name || profileDetails?.name || '';
   const headerTagline = data.company?.tagline || profileDetails?.tagline || '';
   const headerLogo = data.company?.logoUrl || profileDetails?.logoUrl || '';
   const entityUrl = ((profileUrl ?? '') || profileDetails?.profileUrl || '').trim();
+  const displayName = decodeUnicodeEscapes(headerName) || 'Unknown profile';
+  // Short, relevant description: use the profile tagline when available, otherwise a
+  // concise summary of what this dashboard shows for the selected profile.
+  const headerDescription = headerTagline
+    ? decodeUnicodeEscapes(headerTagline)
+    : `Engagement intelligence for ${displayName} — people, companies and post activity from recent LinkedIn engagement.`;
   const showHeader = Boolean(data.company) || Boolean(headerName || headerLogo || headerTagline);
   const showLogo = Boolean(headerLogo) && !logoError;
 
@@ -77,14 +84,8 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <h2 className="truncate text-lg font-semibold text-grey-900">
-                {decodeUnicodeEscapes(headerName) || 'Unknown'}
-              </h2>
-              {headerTagline && (
-                <p className="mt-0.5 line-clamp-2 text-sm text-grey-600">
-                  {decodeUnicodeEscapes(headerTagline)}
-                </p>
-              )}
+              <h2 className="truncate text-lg font-semibold text-grey-900">{displayName}</h2>
+              <p className="mt-0.5 line-clamp-2 text-sm text-grey-600">{headerDescription}</p>
             </div>
             {entityUrl && (
               <a

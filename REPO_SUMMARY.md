@@ -1,21 +1,21 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-21T07:25:49.020Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-21T07:43:03.554Z.
 
 ## Overview
 
-LinkedIn engagement intelligence dashboard with entity profile summary header, person profile pictures with fallbacks, and refresh payload fixes sourcing profile_url/account_id from the captured profile_details.
+LinkedIn engagement intelligence dashboard with profile header, real profile images in People tab, and refresh payload that reuses profile_details (profile_url + account_id) from the Analyze/History API responses.
 
 **Repository:** `linkedin-intelligence-from-arena`  
-**File count:** 48
+**File count:** 49
 
 ## Features
 
-- Entity profile summary header above the tabs with logo/avatar fallback, name, tagline and View Profile CTA sourced from company_profile or profile_details
-- Person cards in the People tab render actual LinkedIn profile pictures with gradient initials fallback on missing or failed images
-- Refresh action re-sends profile_url and account_id extracted from the current data state's profile_details instead of empty strings
-- Search, analyze and history flows for LinkedIn company activity
-- Arena email gate with access-denied screen
+- Selected profile header with name and description above the tab bar
+- People tab cards use the person's real LinkedIn profile image when a valid URL is available
+- Refresh reuses profile_details (profile_url, account_id) from the intelligence response — never sends empty identifiers
+- Deep extraction of profile_details from arbitrarily nested workflow responses
+- Search, analyze and history flows for company and personal profiles
 
 ## Tech Stack
 
@@ -86,6 +86,7 @@ LinkedIn engagement intelligence dashboard with entity profile summary header, p
 - `lib/history-parse.ts`
 - `lib/parse.ts`
 - `lib/prisma.ts`
+- `lib/profile-details.ts`
 - `lib/search-parse.ts`
 - `lib/types.ts`
 - `lib/utils.ts`
@@ -146,6 +147,7 @@ LinkedIn engagement intelligence dashboard with entity profile summary header, p
 - `lib/history-parse.ts`
 - `lib/parse.ts`
 - `lib/prisma.ts`
+- `lib/profile-details.ts`
 - `lib/search-parse.ts`
 - `lib/types.ts`
 - `lib/utils.ts`
@@ -160,51 +162,83 @@ LinkedIn engagement intelligence dashboard with entity profile summary header, p
 
 ## Latest Change
 
-- **Updated at:** 2026-08-21T07:25:49.020Z
-- **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
+- **Updated at:** 2026-08-21T07:43:03.554Z
+- **Request:** Here’s a cleaner, more precise version of your prompt:
 
-#### **Changes to implement:**
+---
 
-1. **Entity Profile Summary Header Section:**
-* Directly above the sticky container element (`sticky top-16 z-20 border-b border-grey-200 bg-white`), add a prominent profile summary section displaying the currently selected profile's details.
-* **Elements to render**:
-* **Logo/Avatar**: Display the entity image using `company_profile.logo`, `profile_picture_url`, or `logo` from the response data. Fallback to initials if `null`.
-* **Title/Heading**: Display the entity name (e.g., `"Position²"`).
-* **Description/Summary**: Display the description or tagline if present in the data (e.g., `company_profile.tagline` or `description`).
-* **View Profile CTA**: Include a button/link that opens the selected profile's LinkedIn URL (`profile_url` / `company_profile_url`) in a new tab.
+### UI and Refresh API Improvements
 
+1. **Selected Profile Header**
 
+   * Above the existing:
 
+     ```text
+     sticky top-16 z-20 border-b border-grey-200 bg-white
+     ```
 
-2. **Person Profile Pictures in People Tab Cards:**
-* Update the person cards in the **People** tab to render the individual's actual LinkedIn profile picture using the image URL available in the response dataset (e.g., `profile_picture_url` or `profile_picture_url_large`).
-* Retain the existing fallback (gradient background with initials) if the profile picture URL is missing, `null`, or fails to load.
+     section, add a new header section.
+   * Display the **selected profile name** as the heading.
+   * Add a short, relevant description below the profile name.
 
+2. **People Tab – Profile Images**
 
-3. **Fix Analyze API Request Payload on Refresh:**
-* Update the **Refresh** button click handler to ensure `profile_url` and `account_id` are not sent as empty strings `""`.
-* Extract and pass `profile_url` and `account_id` directly from the `profile_details` object present in the current data state (`data.profile_details.profile_url` and `data.profile_details.account_id`).
-* **Required Request Payload Structure**:
-```json
-{
-  "name": "Position²",
-  "profile_url": "https://www.linkedin.com/company/position2/",
-  "account_id": "G9e-s2x1QfWtYjeh68yzrg",
-  "slug": "position2",
-  "email": "saiteja.s@position2.com",
-  "is_company": "true"
-}
+   * In the **People** tab, update each person card to use the person's **LinkedIn profile image/logo** from the available profile data.
+   * Use the existing profile image URL from the API response rather than using a generic/default image when the URL is available.
 
-```
+3. **Refresh Button – Analyze API Payload**
 
+   * When the user clicks **Refresh**, the Analyze API payload is currently missing `profile_url` and `account_id`.
 
+   * For example, the current payload is:
 
+     ```json
+     {
+       "name": "Position²",
+       "profile_url": "",
+       "account_id": "",
+       "slug": "position2",
+       "email": "saiteja.s@position2.com",
+       "is_company": "true"
+     }
+     ```
 
+   * Instead, populate `profile_url` and `account_id` from the existing profile data returned by either the **History API** or **Analyze API**.
 
-#### **Constraints:**
+   * The API response already contains the required data, for example:
 
-* Only touch the files/functions directly related to the points above.
-* Do not change variable names, code style, or structure outside the scope of these changes.
-* Do not add extra features, optimizations, or refactors that weren't requested.
-* If a change requires touching a shared/common file, make the minimal edit needed and leave everything else untouched.
-* After implementing, list exactly which files and lines were changed, and why.
+     ```json
+     {
+       "rows": [
+         {
+           "id": "11",
+           "profile_details": {
+             "name": "Position2",
+             "slug": "position2",
+             "email": "saiteja.s@position2.com",
+             "account_id": "G9e-s2x1QfWtYjeh68yzrg",
+             "post_limit": "3",
+             "post_scope": "all",
+             "profile_url": "https://www.linkedin.com/company/position2/"
+           }
+         }
+       ]
+     }
+     ```
+
+   * When **Refresh** is clicked, reuse the existing `profile_details` data to construct the Analyze API payload.
+
+   * The resulting payload should be:
+
+     ```json
+     {
+       "name": "Position²",
+       "profile_url": "https://www.linkedin.com/company/position2/",
+       "account_id": "G9e-s2x1QfWtYjeh68yzrg",
+       "slug": "position2",
+       "email": "saiteja.s@position2.com",
+       "is_company": "true"
+     }
+     ```
+
+   * **Do not hardcode** `profile_url` or `account_id`. Always derive them from the existing History/Analyze API response.

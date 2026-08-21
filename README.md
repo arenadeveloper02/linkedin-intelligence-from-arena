@@ -1,14 +1,14 @@
 # linkedin-intelligence
 
-LinkedIn engagement intelligence dashboard with entity profile summary header, person profile pictures with fallbacks, and refresh payload fixes sourcing profile_url/account_id from the captured profile_details.
+LinkedIn engagement intelligence dashboard with profile header, real profile images in People tab, and refresh payload that reuses profile_details (profile_url + account_id) from the Analyze/History API responses.
 
 ## Features
 
-- Entity profile summary header above the tabs with logo/avatar fallback, name, tagline and View Profile CTA sourced from company_profile or profile_details
-- Person cards in the People tab render actual LinkedIn profile pictures with gradient initials fallback on missing or failed images
-- Refresh action re-sends profile_url and account_id extracted from the current data state's profile_details instead of empty strings
-- Search, analyze and history flows for LinkedIn company activity
-- Arena email gate with access-denied screen
+- Selected profile header with name and description above the tab bar
+- People tab cards use the person's real LinkedIn profile image when a valid URL is available
+- Refresh reuses profile_details (profile_url, account_id) from the intelligence response — never sends empty identifiers
+- Deep extraction of profile_details from arbitrarily nested workflow responses
+- Search, analyze and history flows for company and personal profiles
 
 ## Tech Stack
 

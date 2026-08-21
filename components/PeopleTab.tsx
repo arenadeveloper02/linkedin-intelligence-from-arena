@@ -31,10 +31,17 @@ function sameCompany(a: string, b: string): boolean {
   return false;
 }
 
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
 function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
   const [avatarError, setAvatarError] = useState(false);
   const barWidth = maxEngagement > 0 ? Math.max(8, Math.round((person.engagementCount / maxEngagement) * 100)) : 0;
-  const showAvatar = Boolean(person.avatarUrl) && !avatarError;
+  // Use the person's real LinkedIn profile image whenever a valid URL is available;
+  // only fall back to the initials placeholder when there is no usable URL or the
+  // image fails to load.
+  const showAvatar = Boolean(person.avatarUrl) && isHttpUrl(person.avatarUrl) && !avatarError;
   return (
     <button
       type="button"
@@ -47,8 +54,9 @@ function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
             src={person.avatarUrl}
             alt={person.fullName}
             referrerPolicy="no-referrer"
+            loading="lazy"
             onError={() => setAvatarError(true)}
-            className="h-11 w-11 shrink-0 rounded-full object-cover"
+            className="h-11 w-11 shrink-0 rounded-full border border-grey-100 object-cover"
           />
         ) : (
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white">
