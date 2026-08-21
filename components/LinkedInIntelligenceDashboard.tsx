@@ -29,6 +29,7 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl }: Link
   const [selectedPersonSlug, setSelectedPersonSlug] = useState<string | null>(null);
   const [selectedCompanyName, setSelectedCompanyName] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
 
   const companyAggregates = useMemo(() => buildCompanyAggregates(data.people), [data]);
 
@@ -49,16 +50,19 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl }: Link
   };
 
   const entityUrl = (profileUrl ?? '').trim();
+  const showLogo = Boolean(data.company?.logoUrl) && !logoError;
 
   return (
     <>
       {data.company && (
         <div className="border-b border-grey-200 bg-white">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
-            {data.company.logoUrl ? (
+            {showLogo ? (
               <img
                 src={data.company.logoUrl}
                 alt={data.company.name || 'Entity logo'}
+                referrerPolicy="no-referrer"
+                onError={() => setLogoError(true)}
                 className="h-14 w-14 shrink-0 rounded-xl border border-grey-100 object-cover"
               />
             ) : (

@@ -46,6 +46,7 @@ function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
           <img
             src={person.avatarUrl}
             alt={person.fullName}
+            referrerPolicy="no-referrer"
             onError={() => setAvatarError(true)}
             className="h-11 w-11 shrink-0 rounded-full object-cover"
           />

@@ -1,12 +1,14 @@
 # linkedin-intelligence
 
-Edited linkedin-intelligence-from-arena. Changes: (1) components/HistoryView.tsx + components/HistoryPageClient.tsx — history cards now hide person-level headlines for Company entries (headline only rendered for Personal profiles; company cards fall back to subtitle). (2) components/LinkedInIntelligenceDashboard.tsx — added an entity summary header above the tab navigation showing the logo/avatar (with gradient-initials fallback), entity name, tagline/summary, and a 'View Profile ↗' CTA opening the LinkedIn URL in a new tab via a new optional profileUrl prop; components/DashboardClient.tsx passes selected.profileUrl and components/HistoryPageClient.tsx passes the history entry's profile URL. (3) components/PeopleTab.tsx — PersonCard now renders the person's LinkedIn photo (avatarUrl) with an onError handler that falls back to a CSS gradient initials avatar. prisma/schema.prisma echoed unchanged (FetchLog model).
+Added robust profile header banner rendering above the dashboard tabs (logo with onError fallback to gradient initials, decoded entity name, tagline summary, View Profile CTA opening the LinkedIn URL in a new tab) and fixed People tab person cards so real LinkedIn profile pictures render reliably (referrerPolicy no-referrer to bypass CDN hotlink blocking) while retaining the gradient-initials fallback. Files changed: components/LinkedInIntelligenceDashboard.tsx (added logoError state + onError handler and referrerPolicy on the header banner logo <img> so broken logo URLs fall back to gradient initials; banner, heading, tagline and View Profile button preserved above the tabs), components/PeopleTab.tsx (added referrerPolicy="no-referrer" to the PersonCard avatar <img> so LinkedIn-hosted profile pictures load; existing avatarError fallback retained), prisma/schema.prisma (echoed unchanged — additive-only rule, no columns modified).
 
 ## Features
 
-- Company history cards no longer show person headlines
-- Entity summary header with logo, name, tagline and View Profile CTA on the dashboard
-- People tab cards render real LinkedIn profile photos with gradient initials fallback
+- Entity profile header banner above dashboard tabs with logo, name, tagline and View Profile CTA
+- Gradient-initials fallback when the profile logo is missing or fails to load
+- Person cards render real LinkedIn profile pictures with referrer-safe loading
+- Existing initials fallback preserved for people avatars
+- Overview, People, Companies and Posts tabs unchanged
 
 ## Tech Stack
 
