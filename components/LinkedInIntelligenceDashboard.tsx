@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
-import type { DashboardData, TabKey } from '@/lib/types';
+import type { DashboardData, ProfileDetails, TabKey } from '@/lib/types';
 import { buildCompanyAggregates, decodeUnicodeEscapes, initialsOf } from '@/lib/utils';
 import OverviewTab from '@/components/OverviewTab';
 import PeopleTab from '@/components/PeopleTab';
@@ -15,6 +15,7 @@ import PostModal from '@/components/PostModal';
 interface LinkedInIntelligenceDashboardProps {
   data: DashboardData;
   profileUrl?: string;
+  profileDetails?: ProfileDetails | null;
 }
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -24,7 +25,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'posts', label: 'Posts' },
 ];
 
-export default function LinkedInIntelligenceDashboard({ data, profileUrl }: LinkedInIntelligenceDashboardProps) {
+export default function LinkedInIntelligenceDashboard({ data, profileUrl, profileDetails }: LinkedInIntelligenceDashboardProps) {
   const [tab, setTab] = useState<TabKey>('overview');
   const [selectedPersonSlug, setSelectedPersonSlug] = useState<string | null>(null);
   const [selectedCompanyName, setSelectedCompanyName] = useState<string | null>(null);
@@ -49,34 +50,39 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl }: Link
     setSelectedCompanyName(name);
   };
 
-  const entityUrl = (profileUrl ?? '').trim();
-  const showLogo = Boolean(data.company?.logoUrl) && !logoError;
+  // Entity profile summary header: prefer the parsed company_profile, fall back to profile_details.
+  const headerName = data.company?.name || profileDetails?.name || '';
+  const headerTagline = data.company?.tagline || profileDetails?.tagline || '';
+  const headerLogo = data.company?.logoUrl || profileDetails?.logoUrl || '';
+  const entityUrl = ((profileUrl ?? '') || profileDetails?.profileUrl || '').trim();
+  const showHeader = Boolean(data.company) || Boolean(headerName || headerLogo || headerTagline);
+  const showLogo = Boolean(headerLogo) && !logoError;
 
   return (
     <>
-      {data.company && (
+      {showHeader && (
         <div className="border-b border-grey-200 bg-white">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
             {showLogo ? (
               <img
-                src={data.company.logoUrl}
-                alt={data.company.name || 'Entity logo'}
+                src={headerLogo}
+                alt={headerName || 'Entity logo'}
                 referrerPolicy="no-referrer"
                 onError={() => setLogoError(true)}
                 className="h-14 w-14 shrink-0 rounded-xl border border-grey-100 object-cover"
               />
             ) : (
               <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-purple-600 text-base font-semibold text-white">
-                {initialsOf(data.company.name || '?')}
+                {initialsOf(headerName || '?')}
               </span>
             )}
             <div className="min-w-0 flex-1">
               <h2 className="truncate text-lg font-semibold text-grey-900">
-                {decodeUnicodeEscapes(data.company.name) || 'Unknown'}
+                {decodeUnicodeEscapes(headerName) || 'Unknown'}
               </h2>
-              {data.company.tagline && (
+              {headerTagline && (
                 <p className="mt-0.5 line-clamp-2 text-sm text-grey-600">
-                  {decodeUnicodeEscapes(data.company.tagline)}
+                  {decodeUnicodeEscapes(headerTagline)}
                 </p>
               )}
             </div>

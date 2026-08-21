@@ -1,4 +1,4 @@
-import type { CompanyAggregate, DistributionItem, Person, SeniorityLevel } from './types';
+import type { CompanyAggregate, DistributionItem, Person, ProfileDetails, SeniorityLevel } from './types';
 
 export const SENIORITY_ORDER: SeniorityLevel[] = ['C-Level', 'Director', 'Manager', 'IC', 'Unknown'];
 
@@ -130,4 +130,100 @@ const REACTION_EMOJI: Record<string, string> = {
 
 export function reactionEmoji(type: string): string {
   return REACTION_EMOJI[type.trim().toUpperCase()] ?? '\uD83D\uDC4D';
+}
+
+// --- profile_details extraction (used by DashboardClient for the summary header and refresh payload) ---
+
+type UtilRecord = Record<string, unknown>;
+
+function isUtilRecord(value: unknown): value is UtilRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function utilString(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return '';
+}
+
+function utilNormalizeKey(key: string): string {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function utilPick(record: UtilRecord, keys: string[]): string {
+  for (const key of keys) {
+    const direct = utilString(record[key]);
+    if (direct) return direct;
+  }
+  const targets = keys.map((k) => utilNormalizeKey(k));
+  for (const [recordKey, recordValue] of Object.entries(record)) {
+    if (!targets.includes(utilNormalizeKey(recordKey))) continue;
+    const value = utilString(recordValue);
+    if (value) return value;
+  }
+  return '';
+}
+
+function findProfileDetailsRecord(value: unknown, depth: number): UtilRecord | null {
+  if (depth > 6) return null;
+  let current: unknown = value;
+  if (typeof current === 'string') {
+    const trimmed = current.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        current = JSON.parse(trimmed);
+      } catch {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  }
+  if (Array.isArray(current)) {
+    for (const item of current) {
+      const found = findProfileDetailsRecord(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!isUtilRecord(current)) return null;
+  for (const [key, inner] of Object.entries(current)) {
+    const normalized = utilNormalizeKey(key);
+    if (normalized === 'profiledetails' || normalized === 'profiledetail') {
+      let candidate: unknown = inner;
+      if (typeof candidate === 'string') {
+        try {
+          candidate = JSON.parse(candidate);
+        } catch {
+          candidate = inner;
+        }
+      }
+      if (isUtilRecord(candidate)) return candidate;
+    }
+  }
+  for (const inner of Object.values(current)) {
+    const found = findProfileDetailsRecord(inner, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+export function extractProfileDetails(raw: unknown): ProfileDetails | null {
+  const record = findProfileDetailsRecord(raw, 0);
+  if (!record) return null;
+  const name = utilPick(record, ['name', 'company_name', 'full_name']);
+  const profileUrl = utilPick(record, ['profile_url', 'company_profile_url', 'linkedin_url', 'url']);
+  const accountId = utilPick(record, ['account_id', 'accountId']);
+  const slug = utilPick(record, ['slug', 'universal_name']);
+  const logoUrl = utilPick(record, [
+    'logo',
+    'logo_url',
+    'profile_picture_url',
+    'profile_picture_url_large',
+    'image',
+    'image_url',
+  ]);
+  const tagline = utilPick(record, ['tagline', 'description', 'headline', 'summary']);
+  if (!name && !profileUrl && !accountId) return null;
+  return { name, profileUrl, accountId, slug, logoUrl, tagline };
 }

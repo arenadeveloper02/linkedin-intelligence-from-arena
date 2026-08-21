@@ -1,14 +1,14 @@
 # linkedin-intelligence
 
-Added robust profile header banner rendering above the dashboard tabs (logo with onError fallback to gradient initials, decoded entity name, tagline summary, View Profile CTA opening the LinkedIn URL in a new tab) and fixed People tab person cards so real LinkedIn profile pictures render reliably (referrerPolicy no-referrer to bypass CDN hotlink blocking) while retaining the gradient-initials fallback. Files changed: components/LinkedInIntelligenceDashboard.tsx (added logoError state + onError handler and referrerPolicy on the header banner logo <img> so broken logo URLs fall back to gradient initials; banner, heading, tagline and View Profile button preserved above the tabs), components/PeopleTab.tsx (added referrerPolicy="no-referrer" to the PersonCard avatar <img> so LinkedIn-hosted profile pictures load; existing avatarError fallback retained), prisma/schema.prisma (echoed unchanged — additive-only rule, no columns modified).
+LinkedIn engagement intelligence dashboard with entity profile summary header, person profile pictures with fallbacks, and refresh payload fixes sourcing profile_url/account_id from the captured profile_details.
 
 ## Features
 
-- Entity profile header banner above dashboard tabs with logo, name, tagline and View Profile CTA
-- Gradient-initials fallback when the profile logo is missing or fails to load
-- Person cards render real LinkedIn profile pictures with referrer-safe loading
-- Existing initials fallback preserved for people avatars
-- Overview, People, Companies and Posts tabs unchanged
+- Entity profile summary header above the tabs with logo/avatar fallback, name, tagline and View Profile CTA sourced from company_profile or profile_details
+- Person cards in the People tab render actual LinkedIn profile pictures with gradient initials fallback on missing or failed images
+- Refresh action re-sends profile_url and account_id extracted from the current data state's profile_details instead of empty strings
+- Search, analyze and history flows for LinkedIn company activity
+- Arena email gate with access-denied screen
 
 ## Tech Stack
 

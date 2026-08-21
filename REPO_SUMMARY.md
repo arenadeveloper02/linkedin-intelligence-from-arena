@@ -1,21 +1,21 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-21T06:54:44.798Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-21T07:25:49.020Z.
 
 ## Overview
 
-Added robust profile header banner rendering above the dashboard tabs (logo with onError fallback to gradient initials, decoded entity name, tagline summary, View Profile CTA opening the LinkedIn URL in a new tab) and fixed People tab person cards so real LinkedIn profile pictures render reliably (referrerPolicy no-referrer to bypass CDN hotlink blocking) while retaining the gradient-initials fallback. Files changed: components/LinkedInIntelligenceDashboard.tsx (added logoError state + onError handler and referrerPolicy on the header banner logo <img> so broken logo URLs fall back to gradient initials; banner, heading, tagline and View Profile button preserved above the tabs), components/PeopleTab.tsx (added referrerPolicy="no-referrer" to the PersonCard avatar <img> so LinkedIn-hosted profile pictures load; existing avatarError fallback retained), prisma/schema.prisma (echoed unchanged — additive-only rule, no columns modified).
+LinkedIn engagement intelligence dashboard with entity profile summary header, person profile pictures with fallbacks, and refresh payload fixes sourcing profile_url/account_id from the captured profile_details.
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 48
 
 ## Features
 
-- Entity profile header banner above dashboard tabs with logo, name, tagline and View Profile CTA
-- Gradient-initials fallback when the profile logo is missing or fails to load
-- Person cards render real LinkedIn profile pictures with referrer-safe loading
-- Existing initials fallback preserved for people avatars
-- Overview, People, Companies and Posts tabs unchanged
+- Entity profile summary header above the tabs with logo/avatar fallback, name, tagline and View Profile CTA sourced from company_profile or profile_details
+- Person cards in the People tab render actual LinkedIn profile pictures with gradient initials fallback on missing or failed images
+- Refresh action re-sends profile_url and account_id extracted from the current data state's profile_details instead of empty strings
+- Search, analyze and history flows for LinkedIn company activity
+- Arena email gate with access-denied screen
 
 ## Tech Stack
 
@@ -160,22 +160,44 @@ Added robust profile header banner rendering above the dashboard tabs (logo with
 
 ## Latest Change
 
-- **Updated at:** 2026-08-21T06:54:44.798Z
+- **Updated at:** 2026-08-21T07:25:49.020Z
 - **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 
 #### **Changes to implement:**
 
-1. **Entity Profile Header Banner above Dashboard Tabs:**
-* Add a profile header banner directly above the main navigation tabs (**Overview**, **People**, **Companies**, **Posts**) on the details page to clearly display which profile is currently selected.
-* **Logo**: Display the profile logo/avatar using the image URL from the returned dataset (`company_profile.logo`, `logo`, or `profile_picture_url`). Fallback to gradient initials if unavailable.
-* **Heading**: Display the entity's full name (e.g., `"Position²"` or person name) prominently.
-* **Summary**: Display the description or tagline if present in the data payload (e.g., `company_profile.tagline`, `description`, or profile headline).
-* **View Profile Button**: Add a **"View Profile ↗"** CTA button that opens the selected profile's LinkedIn URL (`profile_url` or `company_profile_url`) in a new tab.
+1. **Entity Profile Summary Header Section:**
+* Directly above the sticky container element (`sticky top-16 z-20 border-b border-grey-200 bg-white`), add a prominent profile summary section displaying the currently selected profile's details.
+* **Elements to render**:
+* **Logo/Avatar**: Display the entity image using `company_profile.logo`, `profile_picture_url`, or `logo` from the response data. Fallback to initials if `null`.
+* **Title/Heading**: Display the entity name (e.g., `"Position²"`).
+* **Description/Summary**: Display the description or tagline if present in the data (e.g., `company_profile.tagline` or `description`).
+* **View Profile CTA**: Include a button/link that opens the selected profile's LinkedIn URL (`profile_url` / `company_profile_url`) in a new tab.
 
 
-2. **Person Card Profile Pictures in People Tab:**
-* Update the person cards in the **People** tab to render the individual's actual LinkedIn profile picture using the image URL already available in the profile dataset (`profile_picture_url` or `avatar_url`).
-* Retain the existing fallback avatar (initials with gradient background) in case the image fails to load or the URL is missing/`null`.
+
+
+2. **Person Profile Pictures in People Tab Cards:**
+* Update the person cards in the **People** tab to render the individual's actual LinkedIn profile picture using the image URL available in the response dataset (e.g., `profile_picture_url` or `profile_picture_url_large`).
+* Retain the existing fallback (gradient background with initials) if the profile picture URL is missing, `null`, or fails to load.
+
+
+3. **Fix Analyze API Request Payload on Refresh:**
+* Update the **Refresh** button click handler to ensure `profile_url` and `account_id` are not sent as empty strings `""`.
+* Extract and pass `profile_url` and `account_id` directly from the `profile_details` object present in the current data state (`data.profile_details.profile_url` and `data.profile_details.account_id`).
+* **Required Request Payload Structure**:
+```json
+{
+  "name": "Position²",
+  "profile_url": "https://www.linkedin.com/company/position2/",
+  "account_id": "G9e-s2x1QfWtYjeh68yzrg",
+  "slug": "position2",
+  "email": "saiteja.s@position2.com",
+  "is_company": "true"
+}
+
+```
+
+
 
 
 

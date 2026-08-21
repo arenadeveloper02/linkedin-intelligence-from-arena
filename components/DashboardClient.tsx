@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import type { DashboardData, SearchResultItem } from '@/lib/types';
+import type { DashboardData, ProfileDetails, SearchResultItem } from '@/lib/types';
 import { parseWorkflowResponse } from '@/lib/parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
+import { extractProfileDetails } from '@/lib/utils';
 import Topbar from '@/components/Topbar';
 import SearchScreen from '@/components/SearchScreen';
 import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
@@ -28,6 +29,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SearchResultItem | null>(null);
+  const [profileDetails, setProfileDetails] = useState<ProfileDetails | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const analyze = async (item: SearchResultItem, isRefresh = false) => {
@@ -38,14 +40,18 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     } else {
       setView('loading');
     }
+    // On refresh, never send profile_url / account_id as empty strings: fall back to the
+    // profile_details captured from the current data state.
+    const profileUrlToSend = item.profileUrl.trim() || (isRefresh ? profileDetails?.profileUrl ?? '' : '');
+    const accountIdToSend = item.id.trim() || (isRefresh ? profileDetails?.accountId ?? '' : '');
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: item.name,
-          profile_url: item.profileUrl,
-          account_id: item.id,
+          profile_url: profileUrlToSend,
+          account_id: accountIdToSend,
           slug: item.slug,
           email: email.trim(),
           is_company: item.isCompany ? 'true' : 'false',
@@ -71,6 +77,8 @@ export default function DashboardClient({ email }: DashboardClientProps) {
       if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
         parsed = parseWorkflowResponse(json.data);
       }
+      const details = extractProfileDetails(json.data);
+      setProfileDetails(details);
       setData(parsed);
       setView('dashboard');
     } catch {
@@ -143,7 +151,11 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         </main>
       )}
       {view === 'dashboard' && data && (
-        <LinkedInIntelligenceDashboard data={data} profileUrl={selected?.profileUrl ?? ''} />
+        <LinkedInIntelligenceDashboard
+          data={data}
+          profileUrl={selected?.profileUrl ?? ''}
+          profileDetails={profileDetails}
+        />
       )}
     </div>
   );

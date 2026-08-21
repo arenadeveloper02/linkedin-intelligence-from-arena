@@ -113,3 +113,12 @@ export interface HistoryEntry {
   companySlug: string;
   isCompany: boolean;
 }
+
+export interface ProfileDetails {
+  name: string;
+  profileUrl: string;
+  accountId: string;
+  slug: string;
+  logoUrl: string;
+  tagline: string;
+}
