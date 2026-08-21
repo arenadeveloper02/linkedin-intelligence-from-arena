@@ -142,7 +142,9 @@ export default function DashboardClient({ email }: DashboardClientProps) {
           <p className="mt-1 text-sm text-grey-500">This can take a moment while we analyze engagement data.</p>
         </main>
       )}
-      {view === 'dashboard' && data && <LinkedInIntelligenceDashboard data={data} />}
+      {view === 'dashboard' && data && (
+        <LinkedInIntelligenceDashboard data={data} profileUrl={selected?.profileUrl ?? ''} />
+      )}
     </div>
   );
 }

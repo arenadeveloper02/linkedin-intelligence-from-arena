@@ -32,7 +32,9 @@ function sameCompany(a: string, b: string): boolean {
 }
 
 function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
+  const [avatarError, setAvatarError] = useState(false);
   const barWidth = maxEngagement > 0 ? Math.max(8, Math.round((person.engagementCount / maxEngagement) * 100)) : 0;
+  const showAvatar = Boolean(person.avatarUrl) && !avatarError;
   return (
     <button
       type="button"
@@ -40,10 +42,15 @@ function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
       className="w-full rounded-xl border border-grey-200 bg-white p-4 text-left shadow-ds-sm transition hover:border-brand-600 hover:shadow-ds-md"
     >
       <div className="flex items-start gap-3">
-        {person.avatarUrl ? (
-          <img src={person.avatarUrl} alt={person.fullName} className="h-11 w-11 rounded-full object-cover" />
+        {showAvatar ? (
+          <img
+            src={person.avatarUrl}
+            alt={person.fullName}
+            onError={() => setAvatarError(true)}
+            className="h-11 w-11 shrink-0 rounded-full object-cover"
+          />
         ) : (
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white">
             {initialsOf(person.fullName)}
           </span>
         )}

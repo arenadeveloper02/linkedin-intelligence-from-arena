@@ -1,8 +1,9 @@
 "use client"
 
 import { useMemo, useState } from 'react';
+import { ExternalLink } from 'lucide-react';
 import type { DashboardData, TabKey } from '@/lib/types';
-import { buildCompanyAggregates } from '@/lib/utils';
+import { buildCompanyAggregates, decodeUnicodeEscapes, initialsOf } from '@/lib/utils';
 import OverviewTab from '@/components/OverviewTab';
 import PeopleTab from '@/components/PeopleTab';
 import CompaniesTab from '@/components/CompaniesTab';
@@ -13,6 +14,7 @@ import PostModal from '@/components/PostModal';
 
 interface LinkedInIntelligenceDashboardProps {
   data: DashboardData;
+  profileUrl?: string;
 }
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -22,7 +24,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'posts', label: 'Posts' },
 ];
 
-export default function LinkedInIntelligenceDashboard({ data }: LinkedInIntelligenceDashboardProps) {
+export default function LinkedInIntelligenceDashboard({ data, profileUrl }: LinkedInIntelligenceDashboardProps) {
   const [tab, setTab] = useState<TabKey>('overview');
   const [selectedPersonSlug, setSelectedPersonSlug] = useState<string | null>(null);
   const [selectedCompanyName, setSelectedCompanyName] = useState<string | null>(null);
@@ -46,8 +48,48 @@ export default function LinkedInIntelligenceDashboard({ data }: LinkedInIntellig
     setSelectedCompanyName(name);
   };
 
+  const entityUrl = (profileUrl ?? '').trim();
+
   return (
     <>
+      {data.company && (
+        <div className="border-b border-grey-200 bg-white">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
+            {data.company.logoUrl ? (
+              <img
+                src={data.company.logoUrl}
+                alt={data.company.name || 'Entity logo'}
+                className="h-14 w-14 shrink-0 rounded-xl border border-grey-100 object-cover"
+              />
+            ) : (
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-purple-600 text-base font-semibold text-white">
+                {initialsOf(data.company.name || '?')}
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-lg font-semibold text-grey-900">
+                {decodeUnicodeEscapes(data.company.name) || 'Unknown'}
+              </h2>
+              {data.company.tagline && (
+                <p className="mt-0.5 line-clamp-2 text-sm text-grey-600">
+                  {decodeUnicodeEscapes(data.company.tagline)}
+                </p>
+              )}
+            </div>
+            {entityUrl && (
+              <a
+                href={entityUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white transition duration-200 hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-600/30"
+              >
+                View Profile
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
+          </div>
+        </div>
+      )}
       <div className="sticky top-16 z-20 border-b border-grey-200 bg-white">
         <div className="mx-auto flex max-w-7xl gap-1 px-4 sm:px-6">
           {TABS.map((t) => (

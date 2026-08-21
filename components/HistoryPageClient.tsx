@@ -116,6 +116,9 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
     }
   };
 
+  const selectedProfileUrl =
+    selectedEntry && /^https?:\/\//i.test(selectedEntry.subtitle.trim()) ? selectedEntry.subtitle.trim() : '';
+
   return (
     <div className="min-h-screen bg-grey-50">
       <Topbar
@@ -132,7 +135,7 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
         onRefresh={data && selectedEntry ? () => void refresh() : undefined}
       />
       {data ? (
-        <LinkedInIntelligenceDashboard data={data} />
+        <LinkedInIntelligenceDashboard data={data} profileUrl={selectedProfileUrl} />
       ) : (
         <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
           <div className="mb-5 flex items-center gap-3">
@@ -203,7 +206,9 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
                         )}
                       </div>
                       <p className="mt-0.5 line-clamp-2 break-all text-xs text-grey-600">
-                        {decodeUnicodeEscapes(entry.headline) || entry.subtitle || '—'}
+                        {entry.isCompany
+                          ? entry.subtitle || '—'
+                          : decodeUnicodeEscapes(entry.headline) || entry.subtitle || '—'}
                       </p>
                     </div>
                   </div>

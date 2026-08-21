@@ -1,13 +1,12 @@
 # linkedin-intelligence
 
-LinkedIn engagement intelligence dashboard — added an in-place Refresh flow on the dashboard/details view (including history-opened dashboards), restored the details header summary subtitle, removed the History card 'Open Dashboard' CTA (full-card click retained), and removed the Reaction type filter chips from the Posts tab.
+Edited linkedin-intelligence-from-arena. Changes: (1) components/HistoryView.tsx + components/HistoryPageClient.tsx — history cards now hide person-level headlines for Company entries (headline only rendered for Personal profiles; company cards fall back to subtitle). (2) components/LinkedInIntelligenceDashboard.tsx — added an entity summary header above the tab navigation showing the logo/avatar (with gradient-initials fallback), entity name, tagline/summary, and a 'View Profile ↗' CTA opening the LinkedIn URL in a new tab via a new optional profileUrl prop; components/DashboardClient.tsx passes selected.profileUrl and components/HistoryPageClient.tsx passes the history entry's profile URL. (3) components/PeopleTab.tsx — PersonCard now renders the person's LinkedIn photo (avatarUrl) with an onError handler that falls back to a CSS gradient initials avatar. prisma/schema.prisma echoed unchanged (FetchLog model).
 
 ## Features
 
-- Refresh button on the details/dashboard toolbar re-triggers the Analyze workflow with the currently selected profile payload and shows an active loading state
-- History cards no longer show an explicit 'Open Dashboard' CTA — clicking anywhere on the card opens the dashboard
-- Details page header shows the summary subtitle 'Signal tracking: people, companies & post engagement'
-- Posts tab filter toolbar no longer includes reaction-type chips; Seniority, Company, Date range, and Most Engaged sort remain
+- Company history cards no longer show person headlines
+- Entity summary header with logo, name, tagline and View Profile CTA on the dashboard
+- People tab cards render real LinkedIn profile photos with gradient initials fallback
 
 ## Tech Stack
 

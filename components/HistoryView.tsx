@@ -94,7 +94,9 @@ export default function HistoryView({ entries, loading, error, onSelect }: Histo
                       )}
                     </div>
                     <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">
-                      {decodeUnicodeEscapes(entry.headline) || entry.subtitle || '—'}
+                      {entry.isCompany
+                        ? entry.subtitle || '—'
+                        : decodeUnicodeEscapes(entry.headline) || entry.subtitle || '—'}
                     </p>
                   </div>
                 </div>
