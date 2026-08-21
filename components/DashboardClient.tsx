@@ -41,11 +41,19 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     } else {
       setView('loading');
     }
-    // Never send profile_url / account_id as empty strings when we already know them:
-    // fall back to the profile_details captured from the last Analyze/History response.
-    const profileUrlToSend = item.profileUrl.trim() || profileDetails?.profileUrl?.trim() || '';
-    const accountIdToSend = item.id.trim() || profileDetails?.accountId?.trim() || '';
-    const slugToSend = item.slug.trim() || profileDetails?.slug?.trim() || '';
+    // Never send profile_url / account_id as empty strings when we already know them.
+    // On Refresh, the canonical profile_details captured from the last Analyze/History
+    // response is the source of truth for profile_url / account_id / slug; the selected
+    // item is only a fallback. On a fresh Analyze, the selected item takes priority.
+    const profileUrlToSend = isRefresh
+      ? profileDetails?.profileUrl?.trim() || item.profileUrl.trim() || ''
+      : item.profileUrl.trim() || profileDetails?.profileUrl?.trim() || '';
+    const accountIdToSend = isRefresh
+      ? profileDetails?.accountId?.trim() || item.id.trim() || ''
+      : item.id.trim() || profileDetails?.accountId?.trim() || '';
+    const slugToSend = isRefresh
+      ? profileDetails?.slug?.trim() || item.slug.trim() || ''
+      : item.slug.trim() || profileDetails?.slug?.trim() || '';
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
