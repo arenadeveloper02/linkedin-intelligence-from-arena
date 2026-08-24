@@ -1,20 +1,21 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-24T15:54:31.801Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-24T15:54:37.600Z.
 
 ## Overview
 
-LinkedIn engagement intelligence dashboard: search companies/people, analyze post engagement, and browse analysis history.
+LinkedIn engagement intelligence dashboard: search people and companies, analyze post engagement, and browse analysis history inside the Arena iframe.
 
 **Repository:** `linkedin-intelligence-from-arena`  
-**File count:** 47
+**File count:** 48
 
 ## Features
 
-- LinkedIn company and person search
+- Company and personal LinkedIn search
 - Engagement intelligence dashboard with Overview, People, Companies and Posts tabs
 - Analysis history with reloadable dashboards
-- Arena email gating via middleware and cookies
+- Arena emailId gating via middleware and cookie
+- Fetch logging to Neon Postgres via Prisma
 
 ## Tech Stack
 
@@ -84,6 +85,7 @@ LinkedIn engagement intelligence dashboard: search companies/people, analyze pos
 - `lib/prisma.ts`
 - `lib/profile-details.ts`
 - `lib/safe-parse.ts`
+- `lib/sanitize.ts`
 - `lib/search-parse.ts`
 - `lib/types.ts`
 - `lib/utils.ts`
@@ -143,6 +145,7 @@ LinkedIn engagement intelligence dashboard: search companies/people, analyze pos
 - `lib/prisma.ts`
 - `lib/profile-details.ts`
 - `lib/safe-parse.ts`
+- `lib/sanitize.ts`
 - `lib/search-parse.ts`
 - `lib/types.ts`
 - `lib/utils.ts`
@@ -157,5 +160,5 @@ LinkedIn engagement intelligence dashboard: search companies/people, analyze pos
 
 ## Latest Change
 
-- **Updated at:** 2026-08-24T15:54:31.801Z
-- **Request:** error: "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The request body is not valid JSON: no low surrogate in string: line 1 column 134325 (char 134324)\"},\"request_id\":\"req_011CeMp6C7aWNtMv9M8QDMXB\"}"
+- **Updated at:** 2026-08-24T15:54:37.600Z
+- **Request:** "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The request body is not valid JSON: no low surrogate in string: line 1 column 134325 (char 134324)\"},\"request_id\":\"req_011CeMp6C7aWNtMv9M8QDMXB\"}"
