@@ -8,18 +8,18 @@ const WORKFLOW_API_KEY = 'sk-sim-g6HxaMjNLmbQ-iqVeQnYIK3nuiyogqPs';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   let searchInput = '';
-  let isCompany = 'false';
+  let isCompany = 'true';
   try {
     const body = (await request.json()) as { searchInput?: unknown; isCompany?: unknown };
     searchInput = typeof body.searchInput === 'string' ? body.searchInput.trim() : '';
-    isCompany = body.isCompany === 'true' || body.isCompany === true ? 'true' : 'false';
+    isCompany = typeof body.isCompany === 'string' ? body.isCompany : 'true';
   } catch {
     searchInput = '';
   }
 
   if (!searchInput) {
     return NextResponse.json(
-      { success: false, error: 'A non-empty searchInput is required.' },
+      { success: false, error: 'A search input is required.' },
       { status: 400 }
     );
   }
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         'X-API-Key': WORKFLOW_API_KEY,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ searchInput, isCompany }),
+      body: JSON.stringify({ searchInput, isCompany, stream: false }),
       cache: 'no-store',
     });
 

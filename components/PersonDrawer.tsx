@@ -1,6 +1,6 @@
 "use client"
 
-import { ExternalLink, MapPin, Users, X } from 'lucide-react';
+import { ExternalLink, Users, X } from 'lucide-react';
 import type { Person, PostItem } from '@/lib/types';
 import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf, resolvePostUrl } from '@/lib/utils';
 import { CompanyBadge, DecisionMakerBadge, ReactionBadge, SeniorityBadge } from '@/components/Widgets';
@@ -91,14 +91,6 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
                     person.companyName
                   )}
                 </dd>
-              </div>
-            )}
-            {(person.location || person.country) && (
-              <div className="flex items-center justify-between gap-3">
-                <dt className="flex items-center gap-1 text-grey-500">
-                  <MapPin className="h-3.5 w-3.5" /> Location
-                </dt>
-                <dd className="truncate font-medium text-grey-900">{person.location || person.country}</dd>
               </div>
             )}
           </dl>

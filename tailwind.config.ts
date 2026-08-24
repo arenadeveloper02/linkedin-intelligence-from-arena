@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
       fontFamily: {
@@ -10,7 +10,7 @@ const config: Config = {
       colors: {
         grey: {
           50: '#F7F8F9',
-          100: '#EDEEF0',
+          100: '#EFF0F2',
           200: '#E2E3E5',
           300: '#C5C6CC',
           400: '#A7AAB2',
@@ -85,6 +85,16 @@ const config: Config = {
           700: '#C21515',
           800: '#921010',
           900: '#610A0A',
+        },
+        yellow: {
+          50: '#FDFCF3',
+          600: '#DFC612',
+          700: '#B29E0E',
+        },
+        pink: {
+          50: '#FFF7F9',
+          600: '#F8528F',
+          700: '#C64272',
         },
       },
       boxShadow: {

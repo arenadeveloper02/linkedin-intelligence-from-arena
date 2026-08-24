@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from 'react';
-import { ChevronDown, MapPin, Search } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import type { Person, SeniorityLevel } from '@/lib/types';
 import { formatNumber, initialsOf } from '@/lib/utils';
 import { CompanyBadge, DecisionMakerBadge, SeniorityBadge } from '@/components/Widgets';
@@ -78,11 +78,7 @@ function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
           </span>
         )}
       </div>
-      <div className="mt-3 flex items-center justify-between gap-2 text-xs text-grey-500">
-        <span className="flex min-w-0 items-center gap-1 truncate">
-          <MapPin className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{person.location || person.country || '—'}</span>
-        </span>
+      <div className="mt-3 flex items-center justify-end gap-2 text-xs text-grey-500">
         <span className="shrink-0">
           {person.connectionDegree ? `${person.connectionDegree} · ` : ''}
           {person.followersCount > 0 ? `${formatNumber(person.followersCount)} followers` : '—'}
@@ -115,7 +111,6 @@ export default function PeopleTab({ people, companyName, onSelectPerson }: Peopl
   const [search, setSearch] = useState('');
   const [seniorities, setSeniorities] = useState<SeniorityLevel[]>([]);
   const [country, setCountry] = useState('');
-  const [city, setCity] = useState('');
   const [degree, setDegree] = useState('');
   const [decisionOnly, setDecisionOnly] = useState(false);
   const [hideInternal, setHideInternal] = useState(false);
@@ -133,15 +128,11 @@ export default function PeopleTab({ people, companyName, onSelectPerson }: Peopl
   }, [people]);
 
   const countries = useMemo(
-    () => Array.from(new Set(uniquePeople.map((p) => p.country.trim()).filter(Boolean))).sort(),
-    [uniquePeople]
-  );
-  const cities = useMemo(
-    () => Array.from(new Set(uniquePeople.map((p) => p.location.trim()).filter(Boolean))).sort(),
+    () => Array.from(new Set(uniquePeople.map((p) => (p.country || '').trim()).filter(Boolean))).sort(),
     [uniquePeople]
   );
   const degrees = useMemo(
-    () => Array.from(new Set(uniquePeople.map((p) => p.connectionDegree.trim()).filter(Boolean))).sort(),
+    () => Array.from(new Set(uniquePeople.map((p) => (p.connectionDegree || '').trim()).filter(Boolean))).sort(),
     [uniquePeople]
   );
 
@@ -153,14 +144,13 @@ export default function PeopleTab({ people, companyName, onSelectPerson }: Peopl
         if (!haystack.includes(query)) return false;
       }
       if (seniorities.length > 0 && !seniorities.includes(p.seniority)) return false;
-      if (country && p.country.trim() !== country) return false;
-      if (city && p.location.trim() !== city) return false;
-      if (degree && p.connectionDegree.trim() !== degree) return false;
+      if (country && (p.country || '').trim() !== country) return false;
+      if (degree && (p.connectionDegree || '').trim() !== degree) return false;
       if (decisionOnly && !p.isDecisionMaker) return false;
       if (hideInternal && (p.isInternal || sameCompany(p.companyName, companyName))) return false;
       return true;
     });
-  }, [uniquePeople, search, seniorities, country, city, degree, decisionOnly, hideInternal, companyName]);
+  }, [uniquePeople, search, seniorities, country, degree, decisionOnly, hideInternal, companyName]);
 
   const maxEngagement = useMemo(() => filtered.reduce((max, p) => Math.max(max, p.engagementCount), 0), [filtered]);
 
@@ -187,14 +177,6 @@ export default function PeopleTab({ people, companyName, onSelectPerson }: Peopl
           <select value={country} onChange={(e) => setCountry(e.target.value)} className={selectClass}>
             <option value="">All countries</option>
             {countries.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <select value={city} onChange={(e) => setCity(e.target.value)} className={selectClass}>
-            <option value="">All cities</option>
-            {cities.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
@@ -284,8 +266,9 @@ export default function PeopleTab({ people, companyName, onSelectPerson }: Peopl
       })}
 
       {filtered.length === 0 && (
-        <div className="rounded-xl border border-dashed border-grey-300 bg-white p-10 text-center text-sm text-grey-500">
-          No people match the current filters.
+        <div className="rounded-xl border border-grey-200 bg-white p-10 text-center shadow-ds-sm">
+          <p className="text-sm font-medium text-grey-900">No people match your filters</p>
+          <p className="mt-1 text-xs text-grey-500">Try adjusting the search or clearing some filters.</p>
         </div>
       )}
     </div>
