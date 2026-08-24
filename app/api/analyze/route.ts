@@ -2,10 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { recordFetchLog } from '@/lib/actions';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const WORKFLOW_URL =
   'https://agent.thearena.ai/api/workflows/3909ec63-faf0-4d69-abd1-499bc7b158d0/execute';
 const WORKFLOW_API_KEY = 'sk-sim-g6HxaMjNLmbQ-iqVeQnYIK3nuiyogqPs';
+
+// Abort the upstream workflow call before Vercel terminates the function invocation
+// (maxDuration = 60s) so we can return a graceful 504 instead of FUNCTION_INVOCATION_TIMEOUT.
+const UPSTREAM_TIMEOUT_MS = 55000;
+
+const TIMEOUT_ERROR_MESSAGE =
+  'Analysis is taking longer than expected. Please try refreshing in a few moments or try again.';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -52,6 +60,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+
   try {
     const upstream = await fetch(WORKFLOW_URL, {
       method: 'POST',
@@ -68,6 +79,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         is_company: isCompany,
       }),
       cache: 'no-store',
+      signal: controller.signal,
     });
 
     if (!upstream.ok) {
@@ -90,11 +102,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     await recordFetchLog(email, 'analyze-success');
     return NextResponse.json({ success: true, data });
-  } catch {
+  } catch (err) {
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    if (isAbort) {
+      await recordFetchLog(email, 'analyze-error:timeout');
+      return NextResponse.json(
+        { success: false, error: TIMEOUT_ERROR_MESSAGE },
+        { status: 504 }
+      );
+    }
     await recordFetchLog(email, 'analyze-error:network');
     return NextResponse.json(
       { success: false, error: 'Failed to reach the intelligence service. Please try again.' },
       { status: 502 }
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

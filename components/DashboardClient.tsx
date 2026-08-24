@@ -21,6 +21,9 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PERSONAL_PROFILE_ERROR =
   'Unable to process personal profile intelligence at this time. Please select a Company profile or try again later.';
 
+const ANALYSIS_TIMEOUT_ERROR =
+  'Analysis is taking longer than expected. Please try refreshing in a few moments or try again.';
+
 type ViewState = 'search' | 'loading' | 'dashboard';
 
 export default function DashboardClient({ email }: DashboardClientProps) {
@@ -74,7 +77,11 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         json = { success: false };
       }
       if (!res.ok || !json.success) {
-        if (!item.isCompany) {
+        // Gracefully handle serverless timeout / invocation failures: clear the
+        // loading state and surface a friendly, actionable message.
+        if (res.status === 504 || res.status === 500) {
+          setError(ANALYSIS_TIMEOUT_ERROR);
+        } else if (!item.isCompany) {
           setError(PERSONAL_PROFILE_ERROR);
         } else {
           setError(json.error ?? `Request failed with status ${res.status}.`);

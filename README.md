@@ -1,14 +1,13 @@
 # linkedin-intelligence
 
-LinkedIn engagement intelligence dashboard: search a company, analyze post engagement, and explore people, companies and posts with profile summary header, real avatars, and reliable refresh payloads.
+LinkedIn engagement intelligence dashboard — fixed serverless timeout on /api/analyze with maxDuration=60 and AbortController-based upstream timeout, plus graceful 504/500 handling in the frontend analyze caller.
 
 ## Features
 
-- Entity profile summary header (logo, name, tagline, View Profile CTA) above the sticky tab bar
-- Person cards in People tab render real LinkedIn profile pictures with initials fallback
-- Refresh re-runs Analyze with profile_url / account_id sourced from captured profile_details — never empty strings
-- Search, Overview, People, Companies and Posts tabs with drawers and modals
-- Arena email gate with history of previous analyses
+- Responsive UI with Tailwind CSS
+- Next.js App Router pages and components
+- Serverless timeout protection on /api/analyze (maxDuration 60 + AbortController)
+- Graceful frontend handling of 504/500 analysis failures
 
 ## Tech Stack
 
