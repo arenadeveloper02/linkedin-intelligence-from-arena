@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordFetchLog } from '@/lib/actions';
+import { safeJsonStringify, stripUnpairedSurrogateEscapes } from '@/lib/sanitize';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -55,13 +56,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   if (!email || !EMAIL_REGEX.test(email)) {
     return NextResponse.json(
-      { success: false, error: 'A valid email is required.' },
+      { success: false, error: 'A valid email is required to run the analysis.' },
       { status: 400 }
     );
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
 
   try {
     const upstream = await fetch(WORKFLOW_URL, {
@@ -70,13 +71,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         'X-API-Key': WORKFLOW_API_KEY,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
+      // safeJsonStringify guarantees the payload contains no unpaired UTF-16
+      // surrogate escapes (LinkedIn emoji frequently arrive truncated), which
+      // strict upstream JSON parsers would otherwise reject.
+      body: safeJsonStringify({
         name,
         profile_url: profileUrl,
         account_id: accountId,
         slug,
         email,
         is_company: isCompany,
+        stream: false,
       }),
       cache: 'no-store',
       signal: controller.signal,
@@ -85,38 +90,42 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!upstream.ok) {
       await recordFetchLog(email, `analyze-error:${upstream.status}`);
       return NextResponse.json(
-        { success: false, error: `Intelligence service responded with status ${upstream.status}.` },
+        { success: false, error: `Analysis service responded with status ${upstream.status}.` },
         { status: 502 }
       );
     }
 
+    // Read the (potentially very large) analyze payload as text and clean any
+    // unpaired surrogate escape sequences BEFORE parsing so double-encoded
+    // strings inside users_profile_data.values / engagementRecords never throw
+    // during JSON.parse. Falling back to the raw text keeps the response usable
+    // even when the upstream body is not strict JSON — the client-side
+    // safeParseWorkflowResponse handles both shapes without runtime errors.
+    const rawText = await upstream.text();
     let data: unknown = null;
     try {
-      data = (await upstream.json()) as unknown;
+      data = JSON.parse(stripUnpairedSurrogateEscapes(rawText));
     } catch {
-      await recordFetchLog(email, 'analyze-error:invalid-json');
-      return NextResponse.json(
-        { success: false, error: 'Intelligence service returned an invalid response. Please try again.' },
-        { status: 502 }
-      );
+      data = rawText;
     }
+
     await recordFetchLog(email, 'analyze-success');
     return NextResponse.json({ success: true, data });
   } catch (err) {
-    const isAbort = err instanceof Error && err.name === 'AbortError';
-    if (isAbort) {
-      await recordFetchLog(email, 'analyze-error:timeout');
-      return NextResponse.json(
-        { success: false, error: TIMEOUT_ERROR_MESSAGE },
-        { status: 504 }
-      );
+    const aborted = err instanceof Error && err.name === 'AbortError';
+    try {
+      await recordFetchLog(email, aborted ? 'analyze-timeout' : 'analyze-error:network');
+    } catch {
+      // Logging must never mask the client-facing error response.
     }
-    await recordFetchLog(email, 'analyze-error:network');
+    if (aborted) {
+      return NextResponse.json({ success: false, error: TIMEOUT_ERROR_MESSAGE }, { status: 504 });
+    }
     return NextResponse.json(
-      { success: false, error: 'Failed to reach the intelligence service. Please try again.' },
+      { success: false, error: 'Failed to reach the analysis service. Please try again.' },
       { status: 502 }
     );
   } finally {
-    clearTimeout(timeoutId);
+    clearTimeout(timer);
   }
 }

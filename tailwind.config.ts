@@ -22,6 +22,7 @@ const config: Config = {
         },
         brand: {
           50: '#F3F8FE',
+          100: '#E2EEFC',
           200: '#D1E3FA',
           300: '#A3C7F6',
           400: '#76ABF1',
@@ -85,16 +86,6 @@ const config: Config = {
           700: '#C21515',
           800: '#921010',
           900: '#610A0A',
-        },
-        yellow: {
-          50: '#FDFCF3',
-          600: '#DFC612',
-          700: '#B29E0E',
-        },
-        pink: {
-          50: '#FFF7F9',
-          600: '#F8528F',
-          700: '#C64272',
         },
       },
       boxShadow: {

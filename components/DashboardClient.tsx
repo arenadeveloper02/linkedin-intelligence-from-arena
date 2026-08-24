@@ -1,12 +1,11 @@
 "use client"
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
-import type { DashboardData, ProfileDetails, SearchResultItem } from '@/lib/types';
-import { parseWorkflowResponse } from '@/lib/parse';
-import { extractIntelligencePayload } from '@/lib/search-parse';
-import { extractProfileDetails } from '@/lib/utils';
+import { useEffect, useState } from 'react';
+import { Clock, Loader2, Users } from 'lucide-react';
+import type { DashboardData, HistoryEntry, ProfileDetails, SearchResultItem } from '@/lib/types';
+import { safeParseWorkflowResponse } from '@/lib/safe-parse';
+import { parseHistoryRows } from '@/lib/history-parse';
+import { decodeUnicodeEscapes, extractProfileDetails, formatDate, formatNumber, initialsOf } from '@/lib/utils';
 import { extractProfileDetailsFromResponse } from '@/lib/profile-details';
 import Topbar from '@/components/Topbar';
 import SearchScreen from '@/components/SearchScreen';
@@ -27,7 +26,6 @@ const ANALYSIS_TIMEOUT_ERROR =
 type ViewState = 'search' | 'loading' | 'dashboard';
 
 export default function DashboardClient({ email }: DashboardClientProps) {
-  const router = useRouter();
   const isValidEmail = EMAIL_REGEX.test(email.trim());
   const [view, setView] = useState<ViewState>('search');
   const [data, setData] = useState<DashboardData | null>(null);
@@ -35,6 +33,49 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   const [selected, setSelected] = useState<SearchResultItem | null>(null);
   const [profileDetails, setProfileDetails] = useState<ProfileDetails | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Inline history state: rendered as "Recent Searches" directly beneath the search controls.
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      try {
+        const res = await fetch('/api/intelligence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim() }),
+        });
+        let json: { success: boolean; error?: string; data?: unknown } = { success: false };
+        try {
+          json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
+        } catch {
+          json = { success: false };
+        }
+        if (cancelled) return;
+        if (!res.ok || !json.success) {
+          setHistoryError(json.error ?? `History request failed with status ${res.status}.`);
+          setHistoryEntries([]);
+        } else {
+          setHistoryEntries(parseHistoryRows(json.data));
+        }
+      } catch {
+        if (!cancelled) {
+          setHistoryError('Unable to load history. Please try again.');
+          setHistoryEntries([]);
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
 
   const analyze = async (item: SearchResultItem, isRefresh = false) => {
     setSelected(item);
@@ -89,11 +130,11 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         setView('search');
         return;
       }
-      const payload = extractIntelligencePayload(json.data);
-      let parsed = parseWorkflowResponse(payload);
-      if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
-        parsed = parseWorkflowResponse(json.data);
-      }
+      // Non-blocking, error-tolerant parse of the large analyze workflow payload
+      // (double-encoded users_profile_data.values / expanded engagementRecords):
+      // yields to the event loop before parsing and degrades missing/null
+      // person-level fields gracefully instead of throwing.
+      const parsed = await safeParseWorkflowResponse(json.data);
       // Merge profile identifiers from every available source so Refresh always has
       // a real profile_url / account_id. Priority: profile_details found anywhere in
       // the response, then the generic extractor, then the selected item, then the
@@ -141,12 +182,47 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     }
   };
 
-  const openHistory = () => {
-    // Strictly extract the email from the active URL search parameters at runtime.
-    // No fallback to props, state, storage, or closure variables.
-    const urlParams = new URLSearchParams(window.location.search);
-    const fromUrl = urlParams.get('emailId')?.trim() || urlParams.get('email')?.trim() || '';
-    router.push(fromUrl ? `/history?emailId=${encodeURIComponent(fromUrl)}` : '/history');
+  // Clicking a history card immediately loads that entry's stored dashboard payload.
+  const openEntry = async (entry: HistoryEntry) => {
+    const entryProfileUrl = /^https?:\/\//i.test(entry.subtitle.trim()) ? entry.subtitle.trim() : '';
+    const item: SearchResultItem = {
+      id: '',
+      name: entry.title,
+      headline: entry.headline,
+      industry: entry.industry,
+      location: entry.location,
+      followersCount: entry.followersCount,
+      avatarUrl: entry.logoUrl,
+      profileUrl: entryProfileUrl,
+      slug: entry.companySlug,
+      verified: false,
+      premium: false,
+      isCompany: entry.isCompany,
+    };
+    setSelected(item);
+    setError(null);
+    setView('loading');
+    // Safe, non-blocking parse of the stored history payload (same optimized path
+    // used for live analyze responses).
+    const parsed = await safeParseWorkflowResponse(entry.payload);
+    const deepDetails = extractProfileDetailsFromResponse(entry.payload);
+    const mergedDetails: ProfileDetails = {
+      name: deepDetails?.name || entry.title,
+      profileUrl: deepDetails?.profileUrl || entryProfileUrl,
+      accountId: deepDetails?.accountId || '',
+      slug: deepDetails?.slug || entry.companySlug,
+      logoUrl: deepDetails?.logoUrl || entry.logoUrl,
+      tagline: deepDetails?.tagline || entry.headline,
+    };
+    setProfileDetails(mergedDetails);
+    setSelected({
+      ...item,
+      profileUrl: mergedDetails.profileUrl || item.profileUrl,
+      id: mergedDetails.accountId || item.id,
+      slug: mergedDetails.slug || item.slug,
+    });
+    setData(parsed);
+    setView('dashboard');
   };
 
   if (!isValidEmail) {
@@ -177,7 +253,6 @@ export default function DashboardClient({ email }: DashboardClientProps) {
             : undefined
         }
         onRefresh={view === 'dashboard' && selected ? () => void analyze(selected, true) : undefined}
-        onHistory={openHistory}
       />
       <div className={view === 'search' ? '' : 'hidden'}>
         <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
@@ -187,6 +262,102 @@ export default function DashboardClient({ email }: DashboardClientProps) {
             </div>
           )}
           <SearchScreen onSelect={(item) => void analyze(item)} />
+
+          <section className="mt-10">
+            <div className="mb-4 flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                <Clock className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-lg font-semibold text-grey-900">Recent Searches</h2>
+                <p className="text-sm text-grey-500">Select a past analysis to open its dashboard instantly</p>
+              </div>
+            </div>
+            {historyLoading && (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-grey-200 bg-white py-16 text-center shadow-ds-sm">
+                <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
+                <p className="mt-3 text-sm text-grey-500">Loading your recent searches…</p>
+              </div>
+            )}
+            {!historyLoading && historyError && (
+              <div className="rounded-xl border border-error-300 bg-error-50 px-4 py-3 text-sm text-error-700">
+                {historyError}
+              </div>
+            )}
+            {!historyLoading && !historyError && historyEntries.length === 0 && (
+              <div className="rounded-xl border border-dashed border-grey-300 bg-white p-10 text-center text-sm text-grey-500">
+                No history found yet. Run an analysis to see it here.
+              </div>
+            )}
+            {!historyLoading && !historyError && historyEntries.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {historyEntries.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    onClick={() => void openEntry(entry)}
+                    className="group flex flex-col rounded-xl border border-grey-200 bg-white p-5 text-left shadow-ds-sm transition hover:border-brand-600 hover:shadow-ds-md"
+                  >
+                    <div className="flex items-start gap-3">
+                      {entry.logoUrl ? (
+                        <img
+                          src={entry.logoUrl}
+                          alt={entry.title}
+                          referrerPolicy="no-referrer"
+                          className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white">
+                          {initialsOf(entry.title || '?')}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="truncate text-sm font-semibold text-grey-900">
+                            {decodeUnicodeEscapes(entry.title) || 'Unknown'}
+                          </p>
+                          <span
+                            className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                              entry.isCompany ? 'bg-brand-50 text-brand-700' : 'bg-purple-50 text-purple-700'
+                            }`}
+                          >
+                            {entry.isCompany ? '🏢 Company' : '👤 Personal'}
+                          </span>
+                          {entry.companySlug && (
+                            <span className="inline-flex items-center rounded-full bg-grey-50 px-1.5 py-0.5 text-[10px] font-medium text-grey-600">
+                              {entry.companySlug}
+                            </span>
+                          )}
+                        </div>
+                        {!entry.isCompany && (entry.headline || entry.subtitle) && (
+                          <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">
+                            {decodeUnicodeEscapes(entry.headline) || entry.subtitle}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {entry.followersCount > 0 && (
+                      <div className="mt-3 flex items-center gap-2 text-xs text-grey-500">
+                        <span className="flex shrink-0 items-center gap-1">
+                          <Users className="h-3.5 w-3.5" />
+                          {formatNumber(entry.followersCount)} followers
+                        </span>
+                      </div>
+                    )}
+                    {entry.timestamp && (
+                      <span className="mt-2 flex items-center gap-1 text-[11px] text-grey-400">
+                        <Clock className="h-3 w-3" />
+                        Analyzed {formatDate(entry.timestamp) || entry.timestamp}
+                      </span>
+                    )}
+                    <span className="mt-4 inline-flex h-9 items-center justify-center rounded-xl border border-brand-600 bg-white px-4 text-xs font-medium text-brand-600 transition duration-200 group-hover:bg-brand-600 group-hover:text-white">
+                      Open Analysis
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
         </main>
       </div>
       {view === 'loading' && (

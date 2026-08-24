@@ -1,14 +1,15 @@
 # linkedin-intelligence
 
-LinkedIn engagement intelligence dashboard. This edit removes person-level location UI (People tab cards + filter toolbar city selector and Person drawer location row) and optimizes the Analyze workflow response parser (single-pass ingestion, decode-once traversal with depth caps, Set-based engager deduplication, snippet capping, and null-safe field extraction). Changed files: components/PeopleTab.tsx (removed location line in PersonCard footer, removed city state/memo/select and city filter condition, dropped MapPin import), components/PersonDrawer.tsx (removed the Location dl row and MapPin import), lib/parse.ts (optimized parseWorkflowResponse traversal and row ingestion; all person fields degrade gracefully to ''/0 when missing or null), prisma/schema.prisma (echoed unchanged).
+LinkedIn engagement intelligence dashboard with search, analyze and inline recent-search history embedded on the main search screen.
 
 ## Features
 
-- Search LinkedIn companies and analyze engagement intelligence
-- People tab with seniority, country, degree, decision-maker and internal filters
-- Company aggregates, posts and engagement drill-downs
-- Optimized large-payload parsing with graceful null handling
-- History of previous analyses
+- Search LinkedIn companies and people
+- Analyze engagement intelligence via Arena workflow
+- Inline Recent Searches history section beneath search controls
+- One-click reload of past analyses into the full dashboard
+- Non-blocking safe parsing of large double-encoded workflow payloads
+- People, Companies, Posts and Overview tabs with drawers and modals
 
 ## Tech Stack
 
