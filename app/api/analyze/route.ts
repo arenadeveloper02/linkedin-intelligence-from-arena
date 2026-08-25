@@ -2,9 +2,6 @@ import { NextResponse } from 'next/server';
 import { recordFetchLog } from '@/lib/actions';
 import { arenaAuthHeaders, arenaWorkflowError, getArenaApiKey } from '@/lib/arena-api';
 
-// Increase the serverless execution window so long-running analyze workflow
-// executions complete instead of failing with a premature Vercel timeout.
-export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 const ANALYZE_WORKFLOW_URL =
@@ -20,10 +17,8 @@ interface AnalyzeRequestBody {
 }
 
 /**
- * Analyze proxy: forwards the exact payload structure required by the analyze
- * workflow — name, profile_url, account_id, slug, email, is_company, post_limit —
- * without stripping or emptying identifier fields supplied by the client.
- * `post_limit` always defaults to 10.
+ * Analyze proxy: waits for the Arena workflow to finish, then returns the
+ * payload. `post_limit` always defaults to 10.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   let body: AnalyzeRequestBody = {};

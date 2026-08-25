@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import { arenaAuthHeaders, arenaWorkflowError, getArenaApiKey } from '@/lib/arena-api';
 
-// Match the Vercel function limit so long-running history workflow executions
-// are not cut off before the upstream responds.
-export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 const HISTORY_WORKFLOW_URL =

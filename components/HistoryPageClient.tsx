@@ -7,6 +7,7 @@ import type { DashboardData, HistoryEntry, ProfileDetails } from '@/lib/types';
 import { parseWorkflowResponse } from '@/lib/parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
 import { parseHistoryRows } from '@/lib/history-parse';
+import { findNewHistoryMatch, historyFingerprint, sleep } from '@/lib/history-match';
 import {
   completeProfileDetails,
   extractAccountIdFromResponse,
@@ -16,6 +17,7 @@ import {
 } from '@/lib/profile-details';
 import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf } from '@/lib/utils';
 import Topbar from '@/components/Topbar';
+import AnalyzeLoading from '@/components/AnalyzeLoading';
 import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
 
 interface HistoryPageClientProps {
@@ -37,7 +39,7 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
 
   // History load extracted into a callback so it can be re-triggered after
   // Analyze/Refresh. Opening a card and going back reuses the cached list.
-  const loadHistory = useCallback(async (opts?: { silent?: boolean }) => {
+  const loadHistory = useCallback(async (opts?: { silent?: boolean }): Promise<HistoryEntry[] | null> => {
     const silent = opts?.silent === true;
     if (!silent) {
       setLoading(true);
@@ -61,14 +63,17 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
           setError(json.error ?? `History request failed with status ${res.status}.`);
           setEntries([]);
         }
-      } else {
-        setEntries(parseHistoryRows(json.data));
+        return null;
       }
+      const parsed = parseHistoryRows(json.data);
+      setEntries(parsed);
+      return parsed;
     } catch {
       if (!silent) {
         setError('Unable to load history. Please try again.');
         setEntries([]);
       }
+      return null;
     } finally {
       if (!silent) setLoading(false);
     }
@@ -119,13 +124,17 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
   const refresh = async () => {
     if (!selectedEntry || refreshing) return;
     setRefreshing(true);
+    const seen = new Set(entries.map(historyFingerprint));
+    const target = {
+      name: selectedEntry.title,
+      slug: selectedEntry.companySlug,
+      profileUrl: /^https?:\/\//i.test(selectedEntry.subtitle.trim()) ? selectedEntry.subtitle.trim() : '',
+      accountId: selectedEntry.accountId,
+    };
     try {
-      const entryProfileUrl = /^https?:\/\//i.test(selectedEntry.subtitle.trim())
-        ? selectedEntry.subtitle.trim()
-        : '';
       const identifiers = resolveRefreshIdentifiers({
         details: profileDetails,
-        profileUrl: entryProfileUrl,
+        profileUrl: target.profileUrl,
         accountId: selectedEntry.accountId,
         slug: selectedEntry.companySlug,
         payloads: [selectedEntry.payload, extractIntelligencePayload(selectedEntry.payload)],
@@ -146,20 +155,23 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
           post_limit: 10,
         }),
       });
-      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
+      let json: { success: boolean; pending?: boolean; error?: string; data?: unknown } = { success: false };
       try {
-        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
+        json = (await res.json()) as {
+          success: boolean;
+          pending?: boolean;
+          error?: string;
+          data?: unknown;
+        };
       } catch {
         json = { success: false };
       }
-      if (res.ok && json.success) {
+      if (res.ok && json.success && json.data !== undefined && !json.pending) {
         const payload = extractIntelligencePayload(json.data);
         let parsed = parseWorkflowResponse(payload);
         if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
           parsed = parseWorkflowResponse(json.data);
         }
-        // Merge fresh identifiers from the new response so subsequent refreshes
-        // keep sending fully populated profile_url / account_id.
         const deepDetails = extractProfileDetailsFromResponse(json.data);
         const resolved = resolveRefreshIdentifiers({
           details: deepDetails,
@@ -185,6 +197,18 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
         );
         setData(parsed);
         void loadHistory({ silent: true });
+        return;
+      }
+      const deadline = Date.now() + 5 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await sleep(5000);
+        const latest = await loadHistory({ silent: true });
+        if (!latest) continue;
+        const match = findNewHistoryMatch(latest, target, seen);
+        if (match) {
+          openEntry(match);
+          return;
+        }
       }
     } catch {
       // Keep the currently loaded dashboard data if the refresh fails.
@@ -203,17 +227,21 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
         loading={refreshing}
         subtitle={data ? 'Signal tracking: people, companies & post engagement' : undefined}
         onBack={
-          data
-            ? () => {
-                setData(null);
-                setSelectedEntry(null);
-                setProfileDetails(null);
-              }
-            : backToSearch
+          refreshing
+            ? undefined
+            : data
+              ? () => {
+                  setData(null);
+                  setSelectedEntry(null);
+                  setProfileDetails(null);
+                }
+              : backToSearch
         }
-        onRefresh={data && selectedEntry ? () => void refresh() : undefined}
+        onRefresh={!refreshing && data && selectedEntry ? () => void refresh() : undefined}
       />
-      {data ? (
+      {refreshing ? (
+        <AnalyzeLoading name={selectedEntry?.title} />
+      ) : data ? (
         <LinkedInIntelligenceDashboard data={data} profileUrl={selectedProfileUrl} profileDetails={profileDetails} />
       ) : (
         <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">

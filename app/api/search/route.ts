@@ -3,7 +3,6 @@ import { safeJsonStringify, sanitizeDeep } from '@/lib/sanitize';
 import { arenaAuthHeaders, arenaWorkflowError, getArenaApiKey } from '@/lib/arena-api';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
 
 const SEARCH_WORKFLOW_URL =
   'https://agent.thearena.ai/api/workflows/970f3a69-e05e-4b68-b90c-4887a1e3cd2e/execute';

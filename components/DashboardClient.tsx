@@ -6,6 +6,7 @@ import type { DashboardData, HistoryEntry, ProfileDetails, SearchResultItem } fr
 import { safeParseWorkflowResponse } from '@/lib/safe-parse';
 import { parseHistoryRows } from '@/lib/history-parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
+import { findNewHistoryMatch, historyFingerprint, sleep } from '@/lib/history-match';
 import { decodeUnicodeEscapes, extractProfileDetails, formatDate, formatNumber, initialsOf } from '@/lib/utils';
 import {
   completeProfileDetails,
@@ -16,6 +17,7 @@ import {
 } from '@/lib/profile-details';
 import Topbar from '@/components/Topbar';
 import SearchScreen from '@/components/SearchScreen';
+import AnalyzeLoading from '@/components/AnalyzeLoading';
 import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
 
 interface DashboardClientProps {
@@ -28,7 +30,10 @@ const PERSONAL_PROFILE_ERROR =
   'Unable to process personal profile intelligence at this time. Please select a Company profile or try again later.';
 
 const ANALYSIS_TIMEOUT_ERROR =
-  'Analysis is taking longer than expected. Please try refreshing in a few moments or try again.';
+  'Analysis is still running in the background. Open this profile from Recent Searches in a few minutes.';
+
+const ANALYZE_POLL_MS = 5000;
+const ANALYZE_WAIT_MS = 5 * 60 * 1000;
 
 type ViewState = 'search' | 'loading' | 'dashboard';
 
@@ -45,6 +50,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   const [lastPayload, setLastPayload] = useState<unknown>(null);
   const lastPayloadRef = useRef<unknown>(null);
   const profileDetailsRef = useRef<ProfileDetails | null>(null);
+  const analyzeGenRef = useRef(0);
   lastPayloadRef.current = lastPayload;
   profileDetailsRef.current = profileDetails;
   // Inline history state: rendered as "Recent Searches" directly beneath the search controls.
@@ -164,22 +170,31 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     setView('dashboard');
   };
 
-  // Timeout recovery: when the analyze call hits a serverless 504/500 while the
-  // backend workflow keeps running, poll the history endpoint and seamlessly load
-  // the newly generated record once it lands.
-  const recoverFromHistory = async (item: SearchResultItem): Promise<boolean> => {
-    const nameNorm = decodeUnicodeEscapes(item.name).trim().toLowerCase();
-    const slugNorm = item.slug.trim().toLowerCase();
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await new Promise<void>((resolve) => setTimeout(resolve, attempt === 0 ? 5000 : 10000));
+  const waitForHistoryMatch = async (
+    item: SearchResultItem,
+    seen: Set<string>,
+    isStale: () => boolean
+  ): Promise<boolean> => {
+    const target = {
+      name: item.name,
+      slug: item.slug,
+      profileUrl: item.profileUrl,
+      accountId: item.id,
+    };
+    const seed = await fetchHistoryEntries();
+    if (seed) {
+      setHistoryEntries(seed);
+      for (const entry of seed) seen.add(historyFingerprint(entry));
+    }
+    const deadline = Date.now() + ANALYZE_WAIT_MS;
+    while (Date.now() < deadline) {
+      if (isStale()) return false;
+      await sleep(ANALYZE_POLL_MS);
+      if (isStale()) return false;
       const entries = await fetchHistoryEntries();
       if (!entries) continue;
       setHistoryEntries(entries);
-      const match = entries.find(
-        (e) =>
-          (slugNorm !== '' && e.companySlug.trim().toLowerCase() === slugNorm) ||
-          (nameNorm !== '' && decodeUnicodeEscapes(e.title).trim().toLowerCase() === nameNorm)
-      );
+      const match = findNewHistoryMatch(entries, target, seen);
       if (match) {
         await openEntry(match);
         return true;
@@ -189,13 +204,14 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   };
 
   const analyze = async (item: SearchResultItem, isRefresh = false) => {
+    const gen = (analyzeGenRef.current += 1);
+    const isStale = () => analyzeGenRef.current !== gen;
+    const seen = new Set(historyEntries.map(historyFingerprint));
+    const hadDashboard = isRefresh && data !== null;
     setSelected(item);
     setError(null);
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setView('loading');
-    }
+    setRefreshing(isRefresh);
+    setView('loading');
     // On Refresh, take account_id / profile_url from the loaded profile_details
     // (company_profile.id + profile_url) and the stored response — never send blanks
     // when the selected dashboard already has them.
@@ -215,57 +231,20 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     const profileUrlToSend = identifiers.profileUrl;
     const accountIdToSend = identifiers.accountId;
     const slugToSend = identifiers.slug;
-    try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: item.name,
-          profile_url: profileUrlToSend,
-          account_id: accountIdToSend,
-          slug: slugToSend,
-          email: email.trim(),
-          is_company: item.isCompany ? 'true' : 'false',
-          post_limit: 10,
-        }),
-      });
-      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
-      try {
-        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
-      } catch {
-        json = { success: false };
-      }
-      if (!res.ok || !json.success) {
-        // Gracefully handle serverless timeout / invocation failures. For a fresh
-        // Analyze, automatically poll the history endpoint to load the newly
-        // generated record once the backend workflow completes.
-        if (res.status === 504 || res.status === 500) {
-          if (!isRefresh) {
-            const recovered = await recoverFromHistory(item);
-            if (recovered) return;
-          }
-          setError(ANALYSIS_TIMEOUT_ERROR);
-        } else if (!item.isCompany) {
-          setError(PERSONAL_PROFILE_ERROR);
-        } else {
-          setError(json.error ?? `Request failed with status ${res.status}.`);
-        }
-        setView('search');
-        return;
-      }
-      // Non-blocking, error-tolerant parse of the large analyze workflow payload
-      // (double-encoded users_profile_data.values / expanded engagementRecords):
-      // yields to the event loop before parsing and degrades missing/null
-      // person-level fields gracefully instead of throwing.
-      const parsed = await safeParseWorkflowResponse(json.data);
-      const deepDetails = extractProfileDetailsFromResponse(json.data);
-      const baseDetails = extractProfileDetails(json.data);
+    let settled = false;
+    const applyPayload = async (payload: unknown) => {
+      if (settled || isStale()) return;
+      settled = true;
+      const parsed = await safeParseWorkflowResponse(payload);
+      if (isStale()) return;
+      const deepDetails = extractProfileDetailsFromResponse(payload);
+      const baseDetails = extractProfileDetails(payload);
       const resolved = resolveRefreshIdentifiers({
         details: deepDetails || baseDetails,
         profileUrl: item.profileUrl,
         accountId: item.id,
         slug: item.slug,
-        payloads: [json.data, extractIntelligencePayload(json.data), lastPayloadRef.current],
+        payloads: [payload, extractIntelligencePayload(payload), lastPayloadRef.current],
       });
       const mergedDetails = completeProfileDetails({
         name: deepDetails?.name || baseDetails?.name || item.name || profileDetails?.name || '',
@@ -286,9 +265,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         isCompany: deepDetails?.isCompany ?? baseDetails?.isCompany ?? item.isCompany,
       });
       setProfileDetails(mergedDetails);
-      setLastPayload(json.data);
-      // Update the selected item with the resolved identifiers so a subsequent
-      // Refresh sends the fully populated Analyze payload.
+      setLastPayload(payload);
       setSelected({
         ...item,
         profileUrl: mergedDetails.profileUrl || item.profileUrl,
@@ -297,26 +274,79 @@ export default function DashboardClient({ email }: DashboardClientProps) {
       });
       setData(parsed);
       setView('dashboard');
-      // Silently refresh history in the background so the new record is already
-      // visible when the user navigates back to search.
       void fetchHistoryEntries().then((entries) => {
         if (entries) setHistoryEntries(entries);
       });
+    };
+    try {
+      const kickoff = (async () => {
+        try {
+          const res = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: item.name,
+              profile_url: profileUrlToSend,
+              account_id: accountIdToSend,
+              slug: slugToSend,
+              email: email.trim(),
+              is_company: item.isCompany ? 'true' : 'false',
+              post_limit: 10,
+            }),
+          });
+          let json: { success: boolean; pending?: boolean; error?: string; data?: unknown } = {
+            success: false,
+          };
+          try {
+            json = (await res.json()) as {
+              success: boolean;
+              pending?: boolean;
+              error?: string;
+              data?: unknown;
+            };
+          } catch {
+            json = { success: false };
+          }
+          if (isStale() || settled) return;
+          if (json.success && (json.pending || json.data === undefined)) return;
+          if (res.ok && json.success && json.data !== undefined) {
+            await applyPayload(json.data);
+            return;
+          }
+          if (res.status === 504 || res.status === 502) return;
+          settled = true;
+          if (!item.isCompany) {
+            setError(PERSONAL_PROFILE_ERROR);
+          } else {
+            setError(json.error ?? `Request failed with status ${res.status}.`);
+          }
+          setView(hadDashboard ? 'dashboard' : 'search');
+        } catch {
+          // Network / timeout: keep the loading screen and let history polling finish.
+        }
+      })();
+
+      const poll = (async () => {
+        const recovered = await waitForHistoryMatch(item, seen, () => isStale() || settled);
+        if (recovered) settled = true;
+      })();
+
+      await Promise.all([kickoff, poll]);
+      if (isStale() || settled) return;
+      setError(ANALYSIS_TIMEOUT_ERROR);
+      setView(hadDashboard ? 'dashboard' : 'search');
     } catch {
-      // Network-level timeout/abort: attempt the same history-based recovery on a
-      // fresh Analyze before surfacing an error.
-      if (!isRefresh) {
-        const recovered = await recoverFromHistory(item);
-        if (recovered) return;
-      }
+      if (isStale() || settled) return;
+      const recovered = await waitForHistoryMatch(item, seen, () => isStale() || settled);
+      if (recovered || isStale()) return;
       if (!item.isCompany) {
         setError(PERSONAL_PROFILE_ERROR);
       } else {
         setError('Unable to reach the intelligence service. Please try again.');
       }
-      setView('search');
+      setView(hadDashboard ? 'dashboard' : 'search');
     } finally {
-      if (isRefresh) setRefreshing(false);
+      if (analyzeGenRef.current === gen) setRefreshing(false);
     }
   };
 
@@ -349,9 +379,16 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         }
         onRefresh={view === 'dashboard' && selected ? () => void analyze(selected, true) : undefined}
       />
+      {error && view === 'dashboard' && (
+        <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6">
+          <div className="rounded-xl border border-error-300 bg-error-50 px-4 py-3 text-sm text-error-700">
+            {error}
+          </div>
+        </div>
+      )}
       <div className={view === 'search' ? '' : 'hidden'}>
         <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
-          {error && (
+          {error && view === 'search' && (
             <div className="mb-4 rounded-xl border border-error-300 bg-error-50 px-4 py-3 text-sm text-error-700">
               {error}
             </div>
@@ -454,17 +491,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
           </section>
         </main>
       </div>
-      {view === 'loading' && (
-        <main className="mx-auto flex max-w-7xl flex-col items-center justify-center px-4 py-32 text-center sm:px-6">
-          <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
-          <p className="mt-4 text-sm font-medium text-grey-700">
-            Analyzing {selected ? decodeUnicodeEscapes(selected.name) || 'profile' : 'profile'}…
-          </p>
-          <p className="mt-1 text-xs text-grey-500">
-            Gathering engagement intelligence — this can take up to a minute.
-          </p>
-        </main>
-      )}
+      {view === 'loading' && <AnalyzeLoading name={selected?.name} />}
       {view === 'dashboard' && data && (
         <LinkedInIntelligenceDashboard
           data={data}
