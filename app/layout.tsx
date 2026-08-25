@@ -16,7 +16,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const emailId = await getArenaEmailId();
   return (
     <html lang="en">
-      <body className={`${poppins.className} font-sans bg-grey-50 text-grey-900 antialiased`}>
+      <body className={`${poppins.className} font-sans antialiased`}>
         <ArenaEmailProvider emailId={emailId}>{children}</ArenaEmailProvider>
       </body>
     </html>

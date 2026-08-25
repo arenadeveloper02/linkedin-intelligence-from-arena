@@ -1,12 +1,17 @@
 "use client"
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, Loader2, Users } from 'lucide-react';
-import type { DashboardData, HistoryEntry } from '@/lib/types';
+import type { DashboardData, HistoryEntry, ProfileDetails } from '@/lib/types';
 import { parseWorkflowResponse } from '@/lib/parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
 import { parseHistoryRows } from '@/lib/history-parse';
+import {
+  extractAccountIdFromResponse,
+  extractProfileDetailsFromResponse,
+  extractProfileUrlFromResponse,
+} from '@/lib/profile-details';
 import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf } from '@/lib/utils';
 import Topbar from '@/components/Topbar';
 import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
@@ -22,46 +27,48 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [data, setData] = useState<DashboardData | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<HistoryEntry | null>(null);
+  // Canonical profile identifiers (profile_url / account_id / slug) captured from
+  // the opened history payload so the "View Profile" CTA renders and Refresh
+  // never sends empty identifier fields.
+  const [profileDetails, setProfileDetails] = useState<ProfileDetails | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      setError(null);
+  // History load extracted into a callback so it can be re-triggered when the
+  // user navigates back from the dashboard view — newly analyzed records appear
+  // immediately without a manual page reload.
+  const loadHistory = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/intelligence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+        cache: 'no-store',
+      });
+      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
       try {
-        const res = await fetch('/api/intelligence', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim() }),
-        });
-        let json: { success: boolean; error?: string; data?: unknown } = { success: false };
-        try {
-          json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
-        } catch {
-          json = { success: false };
-        }
-        if (cancelled) return;
-        if (!res.ok || !json.success) {
-          setError(json.error ?? `History request failed with status ${res.status}.`);
-          setEntries([]);
-        } else {
-          setEntries(parseHistoryRows(json.data));
-        }
+        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
       } catch {
-        if (!cancelled) {
-          setError('Unable to load history. Please try again.');
-          setEntries([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+        json = { success: false };
       }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
+      if (!res.ok || !json.success) {
+        setError(json.error ?? `History request failed with status ${res.status}.`);
+        setEntries([]);
+      } else {
+        setEntries(parseHistoryRows(json.data));
+      }
+    } catch {
+      setError('Unable to load history. Please try again.');
+      setEntries([]);
+    } finally {
+      setLoading(false);
+    }
   }, [email]);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   const backToSearch = () => {
     const trimmed = email.trim();
@@ -75,6 +82,22 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
     if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
       parsed = parseWorkflowResponse(entry.payload);
     }
+    // Restore the "View Profile" CTA: deep-extract profile_url / account_id from
+    // the stored history payload (company_details.profile_url,
+    // output.company_profile.profile_url, profile_details, etc.) and keep them
+    // in active dashboard state.
+    const entryProfileUrl = /^https?:\/\//i.test(entry.subtitle.trim()) ? entry.subtitle.trim() : '';
+    const deepDetails = extractProfileDetailsFromResponse(entry.payload);
+    const payloadProfileUrl = extractProfileUrlFromResponse(entry.payload);
+    const payloadAccountId = extractAccountIdFromResponse(entry.payload);
+    setProfileDetails({
+      name: deepDetails?.name || entry.title,
+      profileUrl: deepDetails?.profileUrl || payloadProfileUrl || entryProfileUrl,
+      accountId: deepDetails?.accountId || payloadAccountId || '',
+      slug: deepDetails?.slug || entry.companySlug,
+      logoUrl: deepDetails?.logoUrl || entry.logoUrl,
+      tagline: deepDetails?.tagline || entry.headline,
+    });
     setData(parsed);
   };
 
@@ -82,15 +105,28 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
     if (!selectedEntry || refreshing) return;
     setRefreshing(true);
     try {
-      const profileUrl = /^https?:\/\//i.test(selectedEntry.subtitle.trim()) ? selectedEntry.subtitle.trim() : '';
+      const entryProfileUrl = /^https?:\/\//i.test(selectedEntry.subtitle.trim())
+        ? selectedEntry.subtitle.trim()
+        : '';
+      // Never send profile_url / account_id as empty strings: fall back across the
+      // captured profile_details, the entry subtitle URL, and a deep search of the
+      // stored payload so both fields are always populated in the Analyze payload.
+      const profileUrlToSend =
+        profileDetails?.profileUrl?.trim() ||
+        entryProfileUrl ||
+        extractProfileUrlFromResponse(selectedEntry.payload) ||
+        '';
+      const accountIdToSend =
+        profileDetails?.accountId?.trim() || extractAccountIdFromResponse(selectedEntry.payload) || '';
+      const slugToSend = profileDetails?.slug?.trim() || selectedEntry.companySlug;
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: selectedEntry.title,
-          profile_url: profileUrl,
-          account_id: '',
-          slug: selectedEntry.companySlug,
+          profile_url: profileUrlToSend,
+          account_id: accountIdToSend,
+          slug: slugToSend,
           email: email.trim(),
           is_company: selectedEntry.isCompany ? 'true' : 'false',
         }),
@@ -107,8 +143,24 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
         if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
           parsed = parseWorkflowResponse(json.data);
         }
+        // Merge fresh identifiers from the new response so subsequent refreshes
+        // keep sending fully populated profile_url / account_id.
+        const deepDetails = extractProfileDetailsFromResponse(json.data);
+        if (deepDetails) {
+          setProfileDetails((prev) => ({
+            name: deepDetails.name || prev?.name || selectedEntry.title,
+            profileUrl: deepDetails.profileUrl || prev?.profileUrl || profileUrlToSend,
+            accountId: deepDetails.accountId || prev?.accountId || accountIdToSend,
+            slug: deepDetails.slug || prev?.slug || slugToSend,
+            logoUrl: deepDetails.logoUrl || prev?.logoUrl || selectedEntry.logoUrl,
+            tagline: deepDetails.tagline || prev?.tagline || selectedEntry.headline,
+          }));
+        }
         setData(parsed);
       }
+      // On 504/500 serverless timeouts the currently loaded dashboard is kept
+      // gracefully — the backend workflow result lands in history and is picked up
+      // by the automatic history re-fetch on back navigation.
     } catch {
       // Keep the currently loaded dashboard data if the refresh fails.
     } finally {
@@ -117,7 +169,8 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
   };
 
   const selectedProfileUrl =
-    selectedEntry && /^https?:\/\//i.test(selectedEntry.subtitle.trim()) ? selectedEntry.subtitle.trim() : '';
+    profileDetails?.profileUrl?.trim() ||
+    (selectedEntry && /^https?:\/\//i.test(selectedEntry.subtitle.trim()) ? selectedEntry.subtitle.trim() : '');
 
   return (
     <div className="min-h-screen bg-grey-50">
@@ -129,13 +182,17 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
             ? () => {
                 setData(null);
                 setSelectedEntry(null);
+                setProfileDetails(null);
+                // Re-trigger the history fetch on back navigation so newly analyzed
+                // records are immediately visible without a manual reload.
+                void loadHistory();
               }
             : backToSearch
         }
         onRefresh={data && selectedEntry ? () => void refresh() : undefined}
       />
       {data ? (
-        <LinkedInIntelligenceDashboard data={data} profileUrl={selectedProfileUrl} />
+        <LinkedInIntelligenceDashboard data={data} profileUrl={selectedProfileUrl} profileDetails={profileDetails} />
       ) : (
         <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
           <div className="mb-5 flex items-center gap-3">

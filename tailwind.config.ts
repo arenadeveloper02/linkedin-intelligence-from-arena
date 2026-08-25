@@ -1,11 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  content: [
-    './app/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './lib/**/*.{ts,tsx}',
-  ],
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
       fontFamily: {
@@ -46,6 +42,17 @@ const config: Config = {
           800: '#6B3C81',
           900: '#482856',
         },
+        pink: {
+          50: '#FFF7F9',
+          200: '#FEDCE9',
+          300: '#FCBAD2',
+          400: '#FB97BC',
+          500: '#F975A5',
+          600: '#F8528F',
+          700: '#C64272',
+          800: '#953156',
+          900: '#632139',
+        },
         seablue: {
           50: '#F2FBFD',
           200: '#CCEDF7',
@@ -56,6 +63,28 @@ const config: Config = {
           700: '#0086AB',
           800: '#006480',
           900: '#004356',
+        },
+        yellow: {
+          50: '#FDFCF3',
+          200: '#F9F4D0',
+          300: '#F2E8A0',
+          400: '#ECDD71',
+          500: '#E5D141',
+          600: '#DFC612',
+          700: '#B29E0E',
+          800: '#86770B',
+          900: '#594F07',
+        },
+        green: {
+          50: '#F5FCF9',
+          200: '#D8F4E6',
+          300: '#B1E9CE',
+          400: '#89DEB5',
+          500: '#62D39D',
+          600: '#3BC884',
+          700: '#2FA06A',
+          800: '#23784F',
+          900: '#185035',
         },
         success: {
           50: '#F5FCF9',
@@ -90,31 +119,8 @@ const config: Config = {
           800: '#921010',
           900: '#610A0A',
         },
-        yellow: {
-          50: '#FDFCF3',
-          200: '#F9F4D0',
-          300: '#F2E8A0',
-          400: '#ECDD71',
-          500: '#E5D141',
-          600: '#DFC612',
-          700: '#B29E0E',
-          800: '#86770B',
-          900: '#594F07',
-        },
-        pink: {
-          50: '#FFF7F9',
-          200: '#FEDCE9',
-          300: '#FCBAD2',
-          400: '#FB97BC',
-          500: '#F975A5',
-          600: '#F8528F',
-          700: '#C64272',
-          800: '#953156',
-          900: '#632139',
-        },
       },
       boxShadow: {
-        'ds-xsm': 'none',
         'ds-sm': '0px 1px 2px rgba(44, 45, 51, 0.08)',
         'ds-md': '0px 2px 8px rgba(44, 45, 51, 0.10)',
         'ds-lg': '0px 4px 16px rgba(44, 45, 51, 0.12)',

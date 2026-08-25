@@ -1,22 +1,22 @@
 # Repository Summary: linkedin-intelligence
 
-> Auto-maintained by Sim Development. Last updated: 2026-08-25T08:16:07.175Z.
+> Auto-maintained by Sim Development. Last updated: 2026-08-25T09:35:05.739Z.
 
 ## Overview
 
-LinkedIn engagement intelligence dashboard: search people/companies, analyze post engagement, and browse analysis history inside an Arena iframe.
+LinkedIn engagement intelligence dashboard: search people/companies, run Arena analyze workflows, browse history, and explore engagement analytics (people, companies, posts) inside an Arena iframe.
 
 **Repository:** `linkedin-intelligence-from-arena`  
 **File count:** 50
 
 ## Features
 
-- Company/person LinkedIn search with result cards
-- Analyze workflow with 60s serverless timeout and graceful 504 recovery via history polling
-- Fast lightweight /api/intelligence history endpoint with no extra payload transformations
-- Inline Recent Searches history that re-fetches on back navigation
-- View Profile CTA restored when opening history cards
-- Refresh payload always populated with profile_url and account_id
+- Company/person LinkedIn search with card selection
+- Analyze workflow proxy with 60s serverless duration and timeout fallback polling
+- Inline history via optimized /api/intelligence proxy that forwards { email } directly
+- History auto-refresh on back navigation from details view
+- View Profile CTA restored from deep-extracted profile_url
+- Refresh payload always populates account_id and profile_url via layered fallbacks
 
 ## Tech Stack
 
@@ -55,7 +55,6 @@ LinkedIn engagement intelligence dashboard: search people/companies, analyze pos
 
 - `app/api/analyze/route.ts`
 - `app/api/intelligence/route.ts`
-- `app/api/search/route.ts`
 
 ### Components
 
@@ -103,6 +102,7 @@ LinkedIn engagement intelligence dashboard: search people/companies, analyze pos
 - `postcss.config.mjs`
 - `tailwind.config.ts`
 - `tsconfig.json`
+- `vercel.json`
 
 ### Other
 
@@ -117,7 +117,6 @@ LinkedIn engagement intelligence dashboard: search people/companies, analyze pos
 - `app/access-denied/page.tsx`
 - `app/api/analyze/route.ts`
 - `app/api/intelligence/route.ts`
-- `app/api/search/route.ts`
 - `app/arena-ds-tokens.css`
 - `app/error.tsx`
 - `app/globals.css`
@@ -161,39 +160,48 @@ LinkedIn engagement intelligence dashboard: search people/companies, analyze pos
 - `prisma/schema.prisma`
 - `tailwind.config.ts`
 - `tsconfig.json`
+- `vercel.json`
 
 ## Latest Change
 
-- **Updated at:** 2026-08-25T08:16:07.175Z
+- **Updated at:** 2026-08-25T09:35:05.739Z
 - **Request:** Implement the following functionality in the codebase. Do not modify, refactor, remove, or "clean up" any other part of the code beyond what is explicitly listed below. Preserve existing formatting, naming conventions, comments, and logic in all unrelated sections.
 
 #### **Changes to implement:**
 
-1. **Optimize History API Endpoint Performance (`/api/history`):**
-* Resolve sluggish response times on the frontend History API call.
-* Remove unnecessary backend overhead, heavy middleware, or extra payload transformations in the API route handler that cause execution delay compared to direct Postman requests.
-* Add light caching or response compression if applicable to make initial history fetching instant on screen render.
+1. **Optimize History API Fetching (`/api/history`):**
+* Resolve response delays on the frontend History API endpoint compared to Postman requests.
+* Ensure the proxy route handler for `POST [https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute](https://agent.thearena.ai/api/workflows/9a27db23-9366-416b-b0c8-9c65e7eda202/execute)` passes the `email` search parameter directly without unnecessary server-side payload transformations or unoptimized blocking logic.
+* **Payload Structure**:
+```json
+{
+  "email": "<USER_EMAIL_FROM_SEARCH_PARAMS>"
+}
+
+```
 
 
-2. **Handle Analyze API Timeout & Asynchronous Polling/Fallback (`/api/analyze`):**
-* Address the frontend timeout error (`"Analysis is taking longer than expected..."`) caused by serverless function execution limits while the backend workflow succeeds.
-* Increase the serverless handler `maxDuration` timeout limit (e.g., set `export const maxDuration = 60;` in Next.js/Vercel API routes).
-* Update the frontend request handler to catch 504 timeouts gracefully and automatically attempt a lightweight check or re-fetch from the history endpoint to seamlessly load the newly generated record once complete.
 
 
-3. **Re-trigger History Fetching on Dashboard Back Navigation:**
-* When navigating back from the Details/Dashboard page to the main Search page, automatically trigger a fresh fetch of the History API.
-* Ensure newly analyzed records are immediately visible in the inline History section without requiring a manual browser page reload.
+2. **Handle Serverless Timeout & Fallback Polling on Analyze API (`/api/analyze`):**
+* Fix the frontend timeout error (`"Analysis is taking longer than expected..."`) caused by Vercel serverless execution limits while the backend workflow execution succeeds.
+* Increase the maximum execution duration in the route handler configuration (`export const maxDuration = 60;`).
+* Update the frontend caller to catch 504 / timeout responses gracefully and auto-trigger a background re-fetch from the History API to seamlessly load the newly created dataset without blocking the user.
 
 
-4. **Restore "View Profile" CTA Button when Opening History Cards:**
-* Fix state hydration when a user opens a dashboard from a History card click so that the **"View Profile ↗"** CTA button is rendered on the entity summary header.
-* Ensure `profile_url` (or `company_profile_url`) is properly extracted from the history record payload (`company_details.profile_url` or `output.company_profile.profile_url`) and stored in active dashboard state.
+3. **Auto-Refresh History on Back Navigation:**
+* Add a side effect / handler to automatically call the History API whenever navigating back from the Details page to the main Search screen.
+* Ensure recently processed items immediately appear in the inline History section without requiring a manual browser refresh.
+
+
+4. **Restore "View Profile" CTA Button when Loading History Cards:**
+* Ensure `profile_url` (or `company_profile_url`) is properly extracted from history records (`company_details.profile_url` or `output.company_profile.profile_url`) and stored in active dashboard state.
+* Display the **"View Profile ↗"** CTA button on the profile summary header above the dashboard tabs when navigating from a History card click.
 
 
 5. **Fix Missing `account_id` and `profile_url` in Refresh Payload:**
-* Fix the **Refresh** button click handler on the Details page so `account_id` and `profile_url` are never sent as empty strings (`""`).
-* Fallback across `profile_details`, `company_details`, and root record state to ensure both fields are populated in the Analyze API request payload.
+* Fix the **Refresh** button click handler on the Details page to ensure `account_id` and `profile_url` are never sent as empty strings (`""`).
+* Fall back across `profile_details`, `company_details`, and root active profile state to reliably pass both parameters into the Analyze API (`POST [https://agent.thearena.ai/api/workflows/3909ec63-faf0-4d69-abd1-499bc7b158d0/execute](https://agent.thearena.ai/api/workflows/3909ec63-faf0-4d69-abd1-499bc7b158d0/execute)`).
 * **Required Payload Structure**:
 ```json
 {
