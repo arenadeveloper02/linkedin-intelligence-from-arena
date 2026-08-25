@@ -7,6 +7,7 @@ import type {
   PostItem,
 } from './types';
 import { classifySeniority } from './utils';
+import { flattenProfileLayers, isCompanyProfileNode } from './profile-details';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -121,13 +122,19 @@ export function extractActivityId(value: string): string {
 function parseCompanyProfile(raw: unknown): CompanyProfile | null {
   const decoded = deepDecode(raw);
   if (!isRecord(decoded)) return null;
-  const name = pickString(decoded, ['name', 'company_name', 'companyName', 'universal_name', 'universalName']);
-  let logoUrl = pickString(decoded, ['logo', 'logo_url', 'logoUrl', 'image', 'image_url', 'profile_picture']);
+  // Personal rows nest a UserProfile under company_profile with is_company "false".
+  if (!isCompanyProfileNode(decoded)) return null;
+  const merged: UnknownRecord = {};
+  for (const layer of flattenProfileLayers(decoded)) {
+    Object.assign(merged, layer);
+  }
+  const name = pickString(merged, ['name', 'company_name', 'companyName', 'universal_name', 'universalName']);
+  let logoUrl = pickString(merged, ['logo', 'logo_large', 'logo_url', 'logoUrl', 'image', 'image_url']);
   if (!isHttpUrl(logoUrl)) logoUrl = '';
-  const followerCount = pickNumber(decoded, ['follower_count', 'followers_count', 'followers', 'followerCount']);
-  const tagline = pickString(decoded, ['tagline', 'description', 'about', 'summary']);
-  const employeeCount = pickNumber(decoded, ['employee_count', 'employees', 'staff_count', 'employeeCount', 'staffCount']);
-  const industry = pickString(decoded, ['industry', 'industries']);
+  const followerCount = pickNumber(merged, ['follower_count', 'followers_count', 'followers', 'followerCount']);
+  const tagline = pickString(merged, ['tagline']) || pickString(merged, ['description', 'about', 'summary']);
+  const employeeCount = pickNumber(merged, ['employee_count', 'employees', 'staff_count', 'employeeCount', 'staffCount']);
+  const industry = pickString(merged, ['industry', 'industries']);
   if (!name && !tagline && followerCount === 0) return null;
   return { name, logoUrl, followerCount, tagline, employeeCount, industry };
 }

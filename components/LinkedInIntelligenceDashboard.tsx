@@ -50,20 +50,18 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
     setSelectedCompanyName(name);
   };
 
-  // Selected profile header (rendered above the sticky tab bar): prefer the parsed
-  // company_profile, fall back to profile_details captured from the Analyze/History response.
-  const headerName = data.company?.name || profileDetails?.name || '';
-  const headerTagline = data.company?.tagline || profileDetails?.tagline || '';
-  const headerLogo = data.company?.logoUrl || profileDetails?.logoUrl || '';
-  const entityUrl = ((profileUrl ?? '') || profileDetails?.profileUrl || '').trim();
+  // Header copy comes from profile_details in the response: company tagline vs
+  // personal headline. Parsed company_profile is the fallback.
+  const headerName = profileDetails?.name || data.company?.name || '';
+  const headerTagline = profileDetails?.tagline || data.company?.tagline || '';
+  const headerLogo = profileDetails?.logoUrl || data.company?.logoUrl || '';
+  const entityUrl = (profileDetails?.profileUrl || profileUrl || '').trim();
   const displayName = decodeUnicodeEscapes(headerName) || 'Unknown profile';
-  // Short, relevant description: use the profile tagline when available, otherwise a
-  // concise summary of what this dashboard shows for the selected profile.
-  const headerDescription = headerTagline
-    ? decodeUnicodeEscapes(headerTagline)
-    : `Engagement intelligence for ${displayName} — people, companies and post activity from recent LinkedIn engagement.`;
+  const headerDescription = headerTagline ? decodeUnicodeEscapes(headerTagline) : '';
+  const avatarClass = profileDetails?.isCompany === false ? 'rounded-full' : 'rounded-xl';
   const showHeader = Boolean(data.company) || Boolean(headerName || headerLogo || headerTagline);
   const showLogo = Boolean(headerLogo) && !logoError;
+  const postsAuthor = decodeUnicodeEscapes(profileDetails?.name || data.company?.name || '') || 'Author';
 
   return (
     <>
@@ -76,16 +74,18 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
                 alt={headerName || 'Entity logo'}
                 referrerPolicy="no-referrer"
                 onError={() => setLogoError(true)}
-                className="h-14 w-14 shrink-0 rounded-xl border border-grey-100 object-cover"
+                className={`h-14 w-14 shrink-0 border border-grey-100 object-cover ${avatarClass}`}
               />
             ) : (
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-purple-600 text-base font-semibold text-white">
+              <span className={`flex h-14 w-14 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-base font-semibold text-white ${avatarClass}`}>
                 {initialsOf(headerName || '?')}
               </span>
             )}
             <div className="min-w-0 flex-1">
               <h2 className="truncate text-lg font-semibold text-grey-900">{displayName}</h2>
-              <p className="mt-0.5 line-clamp-2 text-sm text-grey-600">{headerDescription}</p>
+              {headerDescription ? (
+                <p className="mt-0.5 line-clamp-2 text-sm text-grey-600">{headerDescription}</p>
+              ) : null}
             </div>
             {entityUrl && (
               <a
@@ -134,7 +134,7 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
           <PostsTab
             posts={data.posts}
             people={data.people}
-            authorName={data.company?.name ?? 'Company'}
+            authorName={postsAuthor}
             onSelectPost={setSelectedPostId}
           />
         )}

@@ -1,15 +1,18 @@
 "use client"
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clock, Loader2, Users } from 'lucide-react';
 import type { DashboardData, HistoryEntry, ProfileDetails, SearchResultItem } from '@/lib/types';
 import { safeParseWorkflowResponse } from '@/lib/safe-parse';
 import { parseHistoryRows } from '@/lib/history-parse';
+import { extractIntelligencePayload } from '@/lib/search-parse';
 import { decodeUnicodeEscapes, extractProfileDetails, formatDate, formatNumber, initialsOf } from '@/lib/utils';
 import {
+  completeProfileDetails,
   extractAccountIdFromResponse,
   extractProfileDetailsFromResponse,
   extractProfileUrlFromResponse,
+  resolveRefreshIdentifiers,
 } from '@/lib/profile-details';
 import Topbar from '@/components/Topbar';
 import SearchScreen from '@/components/SearchScreen';
@@ -40,6 +43,10 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   // Raw payload from the last successful Analyze/History load — final fallback
   // source for profile_url / account_id when building the Refresh payload.
   const [lastPayload, setLastPayload] = useState<unknown>(null);
+  const lastPayloadRef = useRef<unknown>(null);
+  const profileDetailsRef = useRef<ProfileDetails | null>(null);
+  lastPayloadRef.current = lastPayload;
+  profileDetailsRef.current = profileDetails;
   // Inline history state: rendered as "Recent Searches" directly beneath the search controls.
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -68,9 +75,8 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     }
   }, [email]);
 
-  // Full history load with visible loading/error states. Re-invoked on mount AND
-  // whenever the user navigates back from the dashboard so newly analyzed records
-  // appear immediately without a manual page reload.
+  // Full history load with visible loading/error states. Used on first paint only.
+  // Analyze/Refresh update the list in the background via fetchHistoryEntries.
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     setHistoryError(null);
@@ -111,7 +117,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   const openEntry = async (entry: HistoryEntry) => {
     const entryProfileUrl = /^https?:\/\//i.test(entry.subtitle.trim()) ? entry.subtitle.trim() : '';
     const item: SearchResultItem = {
-      id: '',
+      id: entry.accountId || '',
       name: entry.title,
       headline: entry.headline,
       industry: entry.industry,
@@ -134,14 +140,19 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     const deepDetails = extractProfileDetailsFromResponse(entry.payload);
     const payloadProfileUrl = extractProfileUrlFromResponse(entry.payload);
     const payloadAccountId = extractAccountIdFromResponse(entry.payload);
-    const mergedDetails: ProfileDetails = {
+    const mergedDetails = completeProfileDetails({
       name: deepDetails?.name || entry.title,
       profileUrl: deepDetails?.profileUrl || payloadProfileUrl || entryProfileUrl,
-      accountId: deepDetails?.accountId || payloadAccountId || '',
+      accountId: deepDetails?.accountId || payloadAccountId || entry.accountId || '',
       slug: deepDetails?.slug || entry.companySlug,
       logoUrl: deepDetails?.logoUrl || entry.logoUrl,
       tagline: deepDetails?.tagline || entry.headline,
-    };
+      description: deepDetails?.description || '',
+      industry: deepDetails?.industry || entry.industry,
+      location: deepDetails?.location || entry.location,
+      followersCount: deepDetails?.followersCount || entry.followersCount,
+      isCompany: deepDetails?.isCompany ?? entry.isCompany,
+    });
     setProfileDetails(mergedDetails);
     setSelected({
       ...item,
@@ -185,22 +196,25 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     } else {
       setView('loading');
     }
-    // Never send profile_url / account_id as empty strings when we already know them.
-    // On Refresh, the canonical profile_details captured from the last Analyze/History
-    // response is the source of truth for profile_url / account_id / slug; the selected
-    // item is the next fallback, and finally the raw stored payload is deep-searched so
-    // both fields are always populated. On a fresh Analyze, the selected item takes priority.
-    const fallbackProfileUrl = isRefresh ? extractProfileUrlFromResponse(lastPayload) : '';
-    const fallbackAccountId = isRefresh ? extractAccountIdFromResponse(lastPayload) : '';
-    const profileUrlToSend = isRefresh
-      ? profileDetails?.profileUrl?.trim() || item.profileUrl.trim() || fallbackProfileUrl || ''
-      : item.profileUrl.trim() || profileDetails?.profileUrl?.trim() || '';
-    const accountIdToSend = isRefresh
-      ? profileDetails?.accountId?.trim() || item.id.trim() || fallbackAccountId || ''
-      : item.id.trim() || profileDetails?.accountId?.trim() || '';
-    const slugToSend = isRefresh
-      ? profileDetails?.slug?.trim() || item.slug.trim() || ''
-      : item.slug.trim() || profileDetails?.slug?.trim() || '';
+    // On Refresh, take account_id / profile_url from the loaded profile_details
+    // (company_profile.id + profile_url) and the stored response — never send blanks
+    // when the selected dashboard already has them.
+    const identifiers = isRefresh
+      ? resolveRefreshIdentifiers({
+          details: profileDetailsRef.current,
+          profileUrl: item.profileUrl,
+          accountId: item.id,
+          slug: item.slug,
+          payloads: [lastPayloadRef.current, extractIntelligencePayload(lastPayloadRef.current)],
+        })
+      : {
+          profileUrl: item.profileUrl.trim() || profileDetails?.profileUrl?.trim() || '',
+          accountId: item.id.trim() || profileDetails?.accountId?.trim() || '',
+          slug: item.slug.trim() || profileDetails?.slug?.trim() || '',
+        };
+    const profileUrlToSend = identifiers.profileUrl;
+    const accountIdToSend = identifiers.accountId;
+    const slugToSend = identifiers.slug;
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
@@ -212,6 +226,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
           slug: slugToSend,
           email: email.trim(),
           is_company: item.isCompany ? 'true' : 'false',
+          post_limit: 10,
         }),
       });
       let json: { success: boolean; error?: string; data?: unknown } = { success: false };
@@ -243,30 +258,33 @@ export default function DashboardClient({ email }: DashboardClientProps) {
       // yields to the event loop before parsing and degrades missing/null
       // person-level fields gracefully instead of throwing.
       const parsed = await safeParseWorkflowResponse(json.data);
-      // Merge profile identifiers from every available source so Refresh always has
-      // a real profile_url / account_id. Priority: profile_details found anywhere in
-      // the response, then the generic extractor, then the selected item, then the
-      // previously captured details. Never hardcoded.
       const deepDetails = extractProfileDetailsFromResponse(json.data);
       const baseDetails = extractProfileDetails(json.data);
-      const mergedDetails: ProfileDetails = {
+      const resolved = resolveRefreshIdentifiers({
+        details: deepDetails || baseDetails,
+        profileUrl: item.profileUrl,
+        accountId: item.id,
+        slug: item.slug,
+        payloads: [json.data, extractIntelligencePayload(json.data), lastPayloadRef.current],
+      });
+      const mergedDetails = completeProfileDetails({
         name: deepDetails?.name || baseDetails?.name || item.name || profileDetails?.name || '',
-        profileUrl:
-          deepDetails?.profileUrl ||
-          baseDetails?.profileUrl ||
-          item.profileUrl.trim() ||
-          profileDetails?.profileUrl ||
-          '',
-        accountId:
-          deepDetails?.accountId ||
-          baseDetails?.accountId ||
-          item.id.trim() ||
-          profileDetails?.accountId ||
-          '',
-        slug: deepDetails?.slug || baseDetails?.slug || item.slug.trim() || profileDetails?.slug || '',
+        profileUrl: resolved.profileUrl || profileDetails?.profileUrl || '',
+        accountId: resolved.accountId || profileDetails?.accountId || '',
+        slug: resolved.slug || item.slug.trim() || profileDetails?.slug || '',
         logoUrl: deepDetails?.logoUrl || baseDetails?.logoUrl || item.avatarUrl || profileDetails?.logoUrl || '',
         tagline: deepDetails?.tagline || baseDetails?.tagline || item.headline || profileDetails?.tagline || '',
-      };
+        description: deepDetails?.description || baseDetails?.description || profileDetails?.description || '',
+        industry: deepDetails?.industry || baseDetails?.industry || item.industry || profileDetails?.industry || '',
+        location: deepDetails?.location || baseDetails?.location || item.location || profileDetails?.location || '',
+        followersCount:
+          deepDetails?.followersCount ||
+          baseDetails?.followersCount ||
+          item.followersCount ||
+          profileDetails?.followersCount ||
+          0,
+        isCompany: deepDetails?.isCompany ?? baseDetails?.isCompany ?? item.isCompany,
+      });
       setProfileDetails(mergedDetails);
       setLastPayload(json.data);
       // Update the selected item with the resolved identifiers so a subsequent
@@ -326,9 +344,6 @@ export default function DashboardClient({ email }: DashboardClientProps) {
             ? () => {
                 setView('search');
                 setData(null);
-                // Re-trigger a fresh history fetch on back navigation so newly
-                // analyzed records are immediately visible.
-                void loadHistory();
               }
             : undefined
         }
@@ -383,10 +398,10 @@ export default function DashboardClient({ email }: DashboardClientProps) {
                         <img
                           src={entry.logoUrl}
                           alt={entry.title}
-                          className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                          className={`h-12 w-12 shrink-0 object-cover ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}
                         />
                       ) : (
-                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white">
+                        <span className={`flex h-12 w-12 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}>
                           {initialsOf(entry.title || '?')}
                         </span>
                       )}
@@ -413,10 +428,8 @@ export default function DashboardClient({ email }: DashboardClientProps) {
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 line-clamp-2 break-all text-xs text-grey-600">
-                          {entry.isCompany
-                            ? entry.subtitle || '—'
-                            : decodeUnicodeEscapes(entry.headline) || entry.subtitle || '—'}
+                        <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">
+                          {decodeUnicodeEscapes(entry.headline) || '—'}
                         </p>
                       </div>
                     </div>
@@ -434,9 +447,6 @@ export default function DashboardClient({ email }: DashboardClientProps) {
                         Analyzed {formatDate(entry.timestamp) || entry.timestamp}
                       </span>
                     )}
-                    <span className="mt-4 inline-flex h-9 items-center justify-center rounded-xl border border-brand-600 bg-white px-4 text-xs font-medium text-brand-600 transition duration-200 group-hover:bg-brand-600 group-hover:text-white">
-                      Open Analysis
-                    </span>
                   </button>
                 ))}
               </div>

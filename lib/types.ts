@@ -111,6 +111,7 @@ export interface HistoryEntry {
   location: string;
   followersCount: number;
   companySlug: string;
+  accountId: string;
   isCompany: boolean;
 }
 
@@ -121,4 +122,9 @@ export interface ProfileDetails {
   slug: string;
   logoUrl: string;
   tagline: string;
+  description: string;
+  industry: string;
+  location: string;
+  followersCount: number;
+  isCompany: boolean;
 }

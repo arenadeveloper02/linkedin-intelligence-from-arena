@@ -59,14 +59,14 @@ export default function HistoryView({ entries, loading, error, onSelect }: Histo
                 className="group flex flex-col rounded-xl border border-grey-200 bg-white p-5 text-left shadow-ds-sm transition hover:border-brand-600 hover:shadow-ds-md"
               >
                 <div className="flex items-start gap-3">
-                  {entry.logoUrl ? (
-                    <img
-                      src={entry.logoUrl}
-                      alt={entry.title}
-                      className="h-12 w-12 shrink-0 rounded-lg object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white">
+                      {entry.logoUrl ? (
+                        <img
+                          src={entry.logoUrl}
+                          alt={entry.title}
+                          className={`h-12 w-12 shrink-0 object-cover ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}
+                        />
+                      ) : (
+                        <span className={`flex h-12 w-12 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}>
                       {initialsOf(entry.title || '?')}
                     </span>
                   )}
@@ -94,9 +94,7 @@ export default function HistoryView({ entries, loading, error, onSelect }: Histo
                       )}
                     </div>
                     <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">
-                      {entry.isCompany
-                        ? entry.subtitle || '—'
-                        : decodeUnicodeEscapes(entry.headline) || entry.subtitle || '—'}
+                      {decodeUnicodeEscapes(entry.headline) || '—'}
                     </p>
                   </div>
                 </div>
@@ -114,9 +112,6 @@ export default function HistoryView({ entries, loading, error, onSelect }: Histo
                     Analyzed {formatDate(entry.timestamp) || entry.timestamp}
                   </span>
                 )}
-                <span className="mt-4 inline-flex h-9 items-center justify-center rounded-xl border border-brand-600 bg-white px-4 text-xs font-medium text-brand-600 transition duration-200 group-hover:bg-brand-600 group-hover:text-white">
-                  Open Analysis
-                </span>
               </button>
             ))}
           </div>

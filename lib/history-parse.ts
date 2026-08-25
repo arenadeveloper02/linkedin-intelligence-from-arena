@@ -1,4 +1,5 @@
 import type { HistoryEntry } from './types';
+import { extractProfileDetailsFromResponse, flattenProfileLayers } from './profile-details';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -99,61 +100,6 @@ function pickNumber(record: UnknownRecord, keys: string[]): number {
   return 0;
 }
 
-/**
- * Recursively searches deeply nested (and possibly double-JSON-encoded)
- * structures for the first non-empty string matching one of the given keys.
- * Used as a fallback so history cards can surface `profile_details.name`,
- * `output.company_profile.logo`, `profile_picture_url` etc. no matter how
- * deep the workflow response nests them.
- */
-function deepFindString(value: unknown, keys: string[], depth = 6): string {
-  if (depth <= 0) return '';
-  const decoded = deepDecode(value);
-  if (Array.isArray(decoded)) {
-    for (const item of decoded) {
-      const found = deepFindString(item, keys, depth - 1);
-      if (found) return found;
-    }
-    return '';
-  }
-  if (!isRecord(decoded)) return '';
-  const direct = pickString(decoded, keys);
-  if (direct) return direct;
-  for (const nested of Object.values(decoded)) {
-    if (typeof nested === 'string') {
-      const trimmed = nested.trim();
-      if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) continue;
-    }
-    const found = deepFindString(nested, keys, depth - 1);
-    if (found) return found;
-  }
-  return '';
-}
-
-function deepFindNumber(value: unknown, keys: string[], depth = 6): number {
-  if (depth <= 0) return 0;
-  const decoded = deepDecode(value);
-  if (Array.isArray(decoded)) {
-    for (const item of decoded) {
-      const found = deepFindNumber(item, keys, depth - 1);
-      if (found !== 0) return found;
-    }
-    return 0;
-  }
-  if (!isRecord(decoded)) return 0;
-  const direct = pickNumber(decoded, keys);
-  if (direct !== 0) return direct;
-  for (const nested of Object.values(decoded)) {
-    if (typeof nested === 'string') {
-      const trimmed = nested.trim();
-      if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) continue;
-    }
-    const found = deepFindNumber(nested, keys, depth - 1);
-    if (found !== 0) return found;
-  }
-  return 0;
-}
-
 function extractRows(raw: unknown): unknown[] {
   const decoded = deepDecode(raw);
   if (Array.isArray(decoded)) return decoded;
@@ -171,11 +117,10 @@ function extractRows(raw: unknown): unknown[] {
 
 /**
  * Parses the intelligence history workflow response (`output.rows`) into cards.
- * Each entry keeps the raw dataset (`output` / `company_details`) as payload so
- * the dashboard can render it directly on selection. Card display fields
- * (title, logo, headline, industry, followers) are sourced from the
- * `profile_details` / `company_details` / `company_profile` objects when present,
- * with a deep recursive fallback for arbitrarily nested payloads.
+ * Each entry keeps the full history row (`profile_details` + `output`) as payload
+ * so the dashboard can show View Profile and company/person header copy.
+ * Card fields come from profile_details (company tagline vs personal headline),
+ * not from engagement records.
  */
 export function parseHistoryRows(raw: unknown): HistoryEntry[] {
   const rows = extractRows(raw);
@@ -183,12 +128,11 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
   rows.forEach((row, index) => {
     const record = deepDecode(row);
     if (!isRecord(record)) return;
-    let payload: unknown = record;
-    if ('output' in record) {
-      payload = deepDecode(record.output);
-    } else if ('company_details' in record) {
-      payload = deepDecode(record.company_details);
-    }
+    // Keep the full history row (profile_details + output). Dropping
+    // profile_details previously hid the company profile_url (View Profile)
+    // and let engagement headlines leak into the card description.
+    const payload: unknown = record;
+    const details = extractProfileDetailsFromResponse(record);
     const detailSources: UnknownRecord[] = [];
     if (isRecord(payload)) {
       const nestedKeys = [
@@ -198,10 +142,14 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
         'companyDetails',
         'company_profile',
         'companyProfile',
+        'person_profile',
+        'personProfile',
+        'personal_profile',
+        'personalProfile',
       ];
       for (const nestedKey of nestedKeys) {
         const nested = deepDecode((payload as UnknownRecord)[nestedKey]);
-        if (isRecord(nested)) detailSources.push(nested);
+        if (isRecord(nested)) detailSources.push(...flattenProfileLayers(nested));
       }
       detailSources.push(payload);
     }
@@ -220,9 +168,7 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       }
       return 0;
     };
-    // Title comes from `profile_details.name` first, then `company_details.company`
-    // / `company_details.name` style fields across the detail sources.
-    let title = pickAcross(['name', 'company', 'company_name', 'companyName']);
+    let title = details?.name || pickAcross(['name', 'company', 'company_name', 'companyName']);
     if (!title) {
       title = pickString(record, [
         'name',
@@ -236,50 +182,38 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
         'query',
       ]);
     }
-    if (!title) {
-      title = pickAcross(['alias', 'search_name', 'searchName', 'title', 'query']);
-    }
-    // Deep fallback: search the entire payload/record tree for an entity name
-    // so cards never fall back to the generic "History item N" label when a
-    // name exists anywhere in the nested workflow response.
-    if (!title) {
-      title = deepFindString(payload, ['name', 'company', 'company_name', 'companyName']);
-    }
-    if (!title) {
-      title = deepFindString(record, ['name', 'company', 'company_name', 'companyName', 'alias', 'search_name', 'title', 'query']);
-    }
-    // The company slug (e.g. "position2") is surfaced as a subtitle/tag on the card.
-    let companySlug = pickAcross([
+    let companySlug = details?.slug || pickAcross([
       'company_slug',
       'companySlug',
       'slug',
       'universal_name',
       'universalName',
+      'public_identifier',
+      'publicIdentifier',
     ]);
-    if (!companySlug) {
-      companySlug = deepFindString(payload, ['company_slug', 'companySlug', 'universal_name', 'universalName', 'slug']);
+    // Subtitle is the LinkedIn profile URL (used by View Profile), never the slug.
+    let subtitle = details?.profileUrl || '';
+    if (!isHttpUrl(subtitle)) {
+      subtitle = pickString(record, [
+        'company_profile_url',
+        'companyProfileUrl',
+        'profile_url',
+        'profileUrl',
+        'linkedin_url',
+        'linkedinUrl',
+      ]);
     }
-    let subtitle = pickString(record, [
-      'company_profile_url',
-      'companyProfileUrl',
-      'profile_url',
-      'profileUrl',
-      'linkedin_url',
-      'linkedinUrl',
-      'url',
-      'slug',
-      'headline',
-    ]);
-    if (!subtitle) {
+    if (!isHttpUrl(subtitle)) {
       subtitle = pickAcross([
         'company_profile_url',
         'companyProfileUrl',
         'profile_url',
+        'profileUrl',
         'linkedin_url',
-        'url',
-        'alias',
+        'linkedinUrl',
       ]);
     }
+    if (!isHttpUrl(subtitle)) subtitle = '';
     const timestamp = pickString(record, [
       'created_at',
       'createdAt',
@@ -290,92 +224,75 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       'updated_at',
       'updatedAt',
     ]);
-    // Logo/avatar extraction covers company_details.logo, company_profile.logo
-    // and profile_picture_url style fields across the detail sources.
-    const logoKeys = [
-      'logo',
-      'logo_url',
-      'logoUrl',
-      'image',
-      'image_url',
-      'profile_picture',
-      'profile_picture_url',
-      'profilePictureUrl',
-      'avatar',
-      'avatar_url',
-      'avatarUrl',
-    ];
-    let logoUrl = pickAcross(logoKeys);
+    const logoKeys = details?.isCompany
+      ? ['logo', 'logo_large', 'logo_url', 'logoUrl', 'image', 'image_url']
+      : [
+          'profile_picture_url_large',
+          'profile_picture_url',
+          'profilePictureUrl',
+          'picture',
+          'avatar',
+          'avatar_url',
+        ];
+    let logoUrl = details?.logoUrl || pickAcross(logoKeys);
     if (!isHttpUrl(logoUrl)) logoUrl = '';
-    // Deep fallback: pull the logo from anywhere in the nested payload (e.g.
-    // `output.company_profile.logo`). Falls back to '' so the UI renders the
-    // initials placeholder cleanly.
-    if (!logoUrl) {
-      const deepLogo = deepFindString(payload, logoKeys);
-      if (isHttpUrl(deepLogo)) logoUrl = deepLogo;
-    }
-    if (!logoUrl) {
-      const deepLogo = deepFindString(record, logoKeys);
-      if (isHttpUrl(deepLogo)) logoUrl = deepLogo;
-    }
-    let headline = decodeEscapes(pickAcross(['headline', 'tagline', 'description', 'about', 'summary']));
+    // Card description: company tagline vs personal headline — only from profile_details.
+    let headline = decodeEscapes(details?.tagline || '');
     if (!headline) {
-      headline = decodeEscapes(deepFindString(payload, ['headline', 'tagline', 'description', 'about', 'summary']));
+      headline = decodeEscapes(
+        details?.isCompany
+          ? pickAcross(['tagline', 'description', 'about'])
+          : pickAcross(['headline', 'sub_title', 'subtitle'])
+      );
     }
-    let industry = pickAcross(['industry', 'industries']);
-    if (!industry) {
-      industry = deepFindString(payload, ['industry', 'industries']);
-    }
-    const location = pickAcross(['location', 'headquarters', 'hq', 'city']);
-    let followersCount = pickNumberAcross(['followers_count', 'follower_count', 'followers', 'followerCount']);
-    if (followersCount === 0) {
-      followersCount = deepFindNumber(payload, ['followers_count', 'follower_count', 'followers', 'followerCount']);
-    }
-    // Entity type detection: distinguishes Company vs Personal history entries.
-    // Priority: explicit `is_company` / `isCompany` flags, then `type`-style
-    // string fields, then presence of company-specific payload sections
-    // (`company_details` / `company_profile`), then person-name indicators,
-    // finally falling back to whether a company slug was found.
-    let entityIsCompany: boolean | null = null;
-    for (const source of detailSources) {
-      const flag = source['is_company'] ?? source['isCompany'];
-      if (typeof flag === 'boolean') {
-        entityIsCompany = flag;
-        break;
-      }
-      if (flag === 'true' || flag === 1 || flag === '1') {
-        entityIsCompany = true;
-        break;
-      }
-      if (flag === 'false' || flag === 0 || flag === '0') {
-        entityIsCompany = false;
-        break;
+    let industry = details?.industry || pickAcross(['industry', 'industries']);
+    const location = details?.location || pickAcross(['location', 'headquarters', 'hq', 'city']);
+    let followersCount =
+      details?.followersCount ||
+      pickNumberAcross(['followers_count', 'follower_count', 'followers', 'followerCount']);
+    let entityIsCompany: boolean | null = typeof details?.isCompany === 'boolean' ? details.isCompany : null;
+    if (entityIsCompany === null) {
+      for (const source of detailSources) {
+        const objectType = asString(source.object);
+        if (/userprofile|personprofile/i.test(objectType)) {
+          entityIsCompany = false;
+          break;
+        }
+        if (/companyprofile/i.test(objectType)) {
+          entityIsCompany = true;
+          break;
+        }
+        const flag = source['is_company'] ?? source['isCompany'];
+        if (typeof flag === 'boolean') {
+          entityIsCompany = flag;
+          break;
+        }
+        if (flag === 'true' || flag === 1 || flag === '1') {
+          entityIsCompany = true;
+          break;
+        }
+        if (flag === 'false' || flag === 0 || flag === '0') {
+          entityIsCompany = false;
+          break;
+        }
       }
     }
     if (entityIsCompany === null) {
       const typeStr = pickAcross(['type', 'entity_type', 'entityType', 'profile_type', 'profileType', 'record_type', 'recordType']);
       if (typeStr) {
-        if (/company|organization|organisation|business/i.test(typeStr)) {
-          entityIsCompany = true;
-        } else if (/person|personal|people|individual|member/i.test(typeStr)) {
+        if (/person|personal|people|individual|member/i.test(typeStr)) {
           entityIsCompany = false;
+        } else if (/company|organization|organisation|business/i.test(typeStr)) {
+          entityIsCompany = true;
         }
       }
     }
     if (entityIsCompany === null) {
-      const companySectionKeys = ['company_details', 'companyDetails', 'company_profile', 'companyProfile'];
-      const hasCompanySection =
-        'company_details' in record ||
-        (isRecord(payload) && companySectionKeys.some((key) => key in (payload as UnknownRecord)));
-      if (hasCompanySection) entityIsCompany = true;
+      const url = subtitle || details?.profileUrl || '';
+      if (/linkedin\.com\/in\//i.test(url)) entityIsCompany = false;
+      else if (/linkedin\.com\/company\//i.test(url)) entityIsCompany = true;
     }
-    if (entityIsCompany === null) {
-      const personIndicator =
-        pickAcross(['first_name', 'firstName', 'last_name', 'lastName']) ||
-        deepFindString(payload, ['first_name', 'firstName', 'last_name', 'lastName']);
-      if (personIndicator) entityIsCompany = false;
-    }
-    const isCompany = entityIsCompany ?? Boolean(companySlug);
+    const isCompany = entityIsCompany ?? false;
     const rawId = pickString(record, ['id', 'row_id', 'rowId', 'urn']);
     entries.push({
       id: rawId ? `${rawId}-${index}` : `history-${index}`,
@@ -389,6 +306,7 @@ export function parseHistoryRows(raw: unknown): HistoryEntry[] {
       location,
       followersCount,
       companySlug,
+      accountId: details?.accountId || '',
       isCompany,
     });
   });

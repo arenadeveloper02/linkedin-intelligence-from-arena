@@ -206,8 +206,29 @@ export function parseSearchResults(raw: unknown, isCompany: boolean): SearchResu
 }
 
 /**
+ * Reattaches sibling `profile_details` / `profile_type` onto an inner `output`
+ * object so company vs personal header fields survive unwrapping.
+ */
+function mergeProfileContext(row: UnknownRecord, inner: unknown): unknown {
+  if (!isRecord(inner)) return inner;
+  const details = row.profile_details ?? row.profileDetails;
+  const type = row.profile_type ?? row.profileType;
+  if (details === undefined && type === undefined) return inner;
+  const next: UnknownRecord = { ...inner };
+  if (details !== undefined && next.profile_details == null && next.profileDetails == null) {
+    next.profile_details = details;
+  }
+  if (type !== undefined && next.profile_type == null && next.profileType == null) {
+    next.profile_type = type;
+  }
+  return next;
+}
+
+/**
  * Extracts the intelligence payload from the analyze workflow response
  * (`output.rows[0].output` when present), falling back to the raw value.
+ * Preserves `profile_details` from the history/analyze row so company pages
+ * keep profile_url, tagline, and logo.
  */
 export function extractIntelligencePayload(raw: unknown): unknown {
   const decoded = deepDecode(raw);
@@ -218,7 +239,7 @@ export function extractIntelligencePayload(raw: unknown): unknown {
     if (Array.isArray(rows) && rows.length > 0) {
       const first = deepDecode(rows[0]);
       if (isRecord(first) && 'output' in first) {
-        return deepDecode(first.output);
+        return mergeProfileContext(first, deepDecode(first.output));
       }
     }
     return null;
@@ -228,7 +249,7 @@ export function extractIntelligencePayload(raw: unknown): unknown {
   if (isRecord(output)) {
     const fromRows = tryRows(output.rows);
     if (fromRows !== null) return fromRows;
-    return output;
+    return mergeProfileContext(decoded, output);
   }
 
   const fromTopRows = tryRows(decoded.rows);

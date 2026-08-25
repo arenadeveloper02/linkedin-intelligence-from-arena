@@ -18,7 +18,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         { status: 500 }
       );
     }
-    const apiKey = process.env.SIM_API_KEY ?? '';
+    const apiKey = process.env.ARENA_API_KEY ?? process.env.SIM_API_KEY ?? '';
     const res = await fetch(SEARCH_WORKFLOW_URL, {
       method: 'POST',
       headers: {

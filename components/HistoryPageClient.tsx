@@ -8,9 +8,11 @@ import { parseWorkflowResponse } from '@/lib/parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
 import { parseHistoryRows } from '@/lib/history-parse';
 import {
+  completeProfileDetails,
   extractAccountIdFromResponse,
   extractProfileDetailsFromResponse,
   extractProfileUrlFromResponse,
+  resolveRefreshIdentifiers,
 } from '@/lib/profile-details';
 import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf } from '@/lib/utils';
 import Topbar from '@/components/Topbar';
@@ -33,12 +35,14 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
   const [profileDetails, setProfileDetails] = useState<ProfileDetails | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // History load extracted into a callback so it can be re-triggered when the
-  // user navigates back from the dashboard view — newly analyzed records appear
-  // immediately without a manual page reload.
-  const loadHistory = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // History load extracted into a callback so it can be re-triggered after
+  // Analyze/Refresh. Opening a card and going back reuses the cached list.
+  const loadHistory = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await fetch('/api/intelligence', {
         method: 'POST',
@@ -53,16 +57,20 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
         json = { success: false };
       }
       if (!res.ok || !json.success) {
-        setError(json.error ?? `History request failed with status ${res.status}.`);
-        setEntries([]);
+        if (!silent) {
+          setError(json.error ?? `History request failed with status ${res.status}.`);
+          setEntries([]);
+        }
       } else {
         setEntries(parseHistoryRows(json.data));
       }
     } catch {
-      setError('Unable to load history. Please try again.');
-      setEntries([]);
+      if (!silent) {
+        setError('Unable to load history. Please try again.');
+        setEntries([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [email]);
 
@@ -90,14 +98,21 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
     const deepDetails = extractProfileDetailsFromResponse(entry.payload);
     const payloadProfileUrl = extractProfileUrlFromResponse(entry.payload);
     const payloadAccountId = extractAccountIdFromResponse(entry.payload);
-    setProfileDetails({
-      name: deepDetails?.name || entry.title,
-      profileUrl: deepDetails?.profileUrl || payloadProfileUrl || entryProfileUrl,
-      accountId: deepDetails?.accountId || payloadAccountId || '',
-      slug: deepDetails?.slug || entry.companySlug,
-      logoUrl: deepDetails?.logoUrl || entry.logoUrl,
-      tagline: deepDetails?.tagline || entry.headline,
-    });
+    setProfileDetails(
+      completeProfileDetails({
+        name: deepDetails?.name || entry.title,
+        profileUrl: deepDetails?.profileUrl || payloadProfileUrl || entryProfileUrl,
+        accountId: deepDetails?.accountId || payloadAccountId || entry.accountId || '',
+        slug: deepDetails?.slug || entry.companySlug,
+        logoUrl: deepDetails?.logoUrl || entry.logoUrl,
+        tagline: deepDetails?.tagline || entry.headline,
+        description: deepDetails?.description || '',
+        industry: deepDetails?.industry || entry.industry,
+        location: deepDetails?.location || entry.location,
+        followersCount: deepDetails?.followersCount || entry.followersCount,
+        isCompany: deepDetails?.isCompany ?? entry.isCompany,
+      })
+    );
     setData(parsed);
   };
 
@@ -108,17 +123,16 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
       const entryProfileUrl = /^https?:\/\//i.test(selectedEntry.subtitle.trim())
         ? selectedEntry.subtitle.trim()
         : '';
-      // Never send profile_url / account_id as empty strings: fall back across the
-      // captured profile_details, the entry subtitle URL, and a deep search of the
-      // stored payload so both fields are always populated in the Analyze payload.
-      const profileUrlToSend =
-        profileDetails?.profileUrl?.trim() ||
-        entryProfileUrl ||
-        extractProfileUrlFromResponse(selectedEntry.payload) ||
-        '';
-      const accountIdToSend =
-        profileDetails?.accountId?.trim() || extractAccountIdFromResponse(selectedEntry.payload) || '';
-      const slugToSend = profileDetails?.slug?.trim() || selectedEntry.companySlug;
+      const identifiers = resolveRefreshIdentifiers({
+        details: profileDetails,
+        profileUrl: entryProfileUrl,
+        accountId: selectedEntry.accountId,
+        slug: selectedEntry.companySlug,
+        payloads: [selectedEntry.payload, extractIntelligencePayload(selectedEntry.payload)],
+      });
+      const profileUrlToSend = identifiers.profileUrl;
+      const accountIdToSend = identifiers.accountId;
+      const slugToSend = identifiers.slug;
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,6 +143,7 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
           slug: slugToSend,
           email: email.trim(),
           is_company: selectedEntry.isCompany ? 'true' : 'false',
+          post_limit: 10,
         }),
       });
       let json: { success: boolean; error?: string; data?: unknown } = { success: false };
@@ -146,21 +161,30 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
         // Merge fresh identifiers from the new response so subsequent refreshes
         // keep sending fully populated profile_url / account_id.
         const deepDetails = extractProfileDetailsFromResponse(json.data);
-        if (deepDetails) {
-          setProfileDetails((prev) => ({
-            name: deepDetails.name || prev?.name || selectedEntry.title,
-            profileUrl: deepDetails.profileUrl || prev?.profileUrl || profileUrlToSend,
-            accountId: deepDetails.accountId || prev?.accountId || accountIdToSend,
-            slug: deepDetails.slug || prev?.slug || slugToSend,
-            logoUrl: deepDetails.logoUrl || prev?.logoUrl || selectedEntry.logoUrl,
-            tagline: deepDetails.tagline || prev?.tagline || selectedEntry.headline,
-          }));
-        }
+        const resolved = resolveRefreshIdentifiers({
+          details: deepDetails,
+          profileUrl: profileUrlToSend,
+          accountId: accountIdToSend,
+          slug: slugToSend,
+          payloads: [json.data, payload],
+        });
+        setProfileDetails((prev) =>
+          completeProfileDetails({
+            name: deepDetails?.name || prev?.name || selectedEntry.title,
+            profileUrl: resolved.profileUrl || prev?.profileUrl || profileUrlToSend,
+            accountId: resolved.accountId || prev?.accountId || accountIdToSend,
+            slug: resolved.slug || prev?.slug || slugToSend,
+            logoUrl: deepDetails?.logoUrl || prev?.logoUrl || selectedEntry.logoUrl,
+            tagline: deepDetails?.tagline || prev?.tagline || selectedEntry.headline,
+            description: deepDetails?.description || prev?.description || '',
+            industry: deepDetails?.industry || prev?.industry || selectedEntry.industry,
+            location: deepDetails?.location || prev?.location || selectedEntry.location,
+            followersCount: deepDetails?.followersCount || prev?.followersCount || selectedEntry.followersCount,
+            isCompany: deepDetails?.isCompany ?? prev?.isCompany ?? selectedEntry.isCompany,
+          })
+        );
         setData(parsed);
-      }
-      // On 504/500 serverless timeouts the currently loaded dashboard is kept
-      // gracefully — the backend workflow result lands in history and is picked up
-      // by the automatic history re-fetch on back navigation.
+        void loadHistory({ silent: true });
     } catch {
       // Keep the currently loaded dashboard data if the refresh fails.
     } finally {
@@ -183,9 +207,6 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
                 setData(null);
                 setSelectedEntry(null);
                 setProfileDetails(null);
-                // Re-trigger the history fetch on back navigation so newly analyzed
-                // records are immediately visible without a manual reload.
-                void loadHistory();
               }
             : backToSearch
         }
@@ -232,10 +253,10 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
                       <img
                         src={entry.logoUrl}
                         alt={entry.title}
-                        className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                        className={`h-12 w-12 shrink-0 object-cover ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}
                       />
                     ) : (
-                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white">
+                      <span className={`flex h-12 w-12 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}>
                         {initialsOf(entry.title || '?')}
                       </span>
                     )}
@@ -262,10 +283,8 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 line-clamp-2 break-all text-xs text-grey-600">
-                        {entry.isCompany
-                          ? entry.subtitle || '—'
-                          : decodeUnicodeEscapes(entry.headline) || entry.subtitle || '—'}
+                      <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">
+                        {decodeUnicodeEscapes(entry.headline) || '—'}
                       </p>
                     </div>
                   </div>

@@ -20,8 +20,9 @@ interface AnalyzeRequestBody {
 
 /**
  * Analyze proxy: forwards the exact payload structure required by the analyze
- * workflow — name, profile_url, account_id, slug, email, is_company — without
- * stripping or emptying identifier fields supplied by the client.
+ * workflow — name, profile_url, account_id, slug, email, is_company, post_limit —
+ * without stripping or emptying identifier fields supplied by the client.
+ * `post_limit` always defaults to 10.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   let body: AnalyzeRequestBody = {};
@@ -60,6 +61,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         slug,
         email,
         is_company: isCompany,
+        post_limit: 10,
       }),
       cache: 'no-store',
     });

@@ -55,7 +55,7 @@ export default function HistoryDrawer({ entries, loading, error, onClose, onSele
                     onClick={() => onSelect(entry)}
                     className="group flex w-full items-start gap-3 rounded-xl border border-grey-200 bg-white p-4 text-left shadow-ds-sm transition hover:border-brand-600 hover:shadow-ds-md"
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-purple-600 text-xs font-semibold text-white">
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-xs font-semibold text-white ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}>
                       {initialsOf(entry.title || '?')}
                     </span>
                     <span className="min-w-0 flex-1">
@@ -69,8 +69,10 @@ export default function HistoryDrawer({ entries, loading, error, onClose, onSele
                           {entry.isCompany ? '🏢 Company' : '👤 Personal'}
                         </span>
                       </span>
-                      {entry.subtitle && (
-                        <span className="mt-0.5 block truncate text-xs text-grey-500">{entry.subtitle}</span>
+                      {entry.headline && (
+                        <span className="mt-0.5 block truncate text-xs text-grey-500">
+                          {entry.headline}
+                        </span>
                       )}
                       {entry.timestamp && (
                         <span className="mt-1 flex items-center gap-1 text-[11px] text-grey-400">
@@ -78,9 +80,6 @@ export default function HistoryDrawer({ entries, loading, error, onClose, onSele
                           {entry.timestamp}
                         </span>
                       )}
-                    </span>
-                    <span className="shrink-0 self-center rounded-lg border border-brand-600 px-3 py-1 text-[11px] font-medium text-brand-600 transition group-hover:bg-brand-600 group-hover:text-white">
-                      Open
                     </span>
                   </button>
                 </li>
