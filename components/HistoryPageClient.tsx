@@ -185,6 +185,7 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
         );
         setData(parsed);
         void loadHistory({ silent: true });
+      }
     } catch {
       // Keep the currently loaded dashboard data if the refresh fails.
     } finally {
