@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { recordFetchLog } from '@/lib/actions';
-import { arenaAuthHeaders, getArenaApiKey } from '@/lib/arena-api';
+import { arenaAuthHeaders, arenaWorkflowError, getArenaApiKey } from '@/lib/arena-api';
 
 // Increase the serverless execution window so long-running analyze workflow
 // executions complete instead of failing with a premature Vercel timeout.
@@ -81,7 +81,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     void recordFetchLog(email, upstream.ok ? 'success' : `error_${upstream.status}`);
     if (!upstream.ok) {
       return NextResponse.json(
-        { success: false, error: `Analyze workflow failed with status ${upstream.status}.` },
+        { success: false, error: arenaWorkflowError('Analyze workflow', upstream.status) },
         { status: upstream.status }
       );
     }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { arenaAuthHeaders, getArenaApiKey } from '@/lib/arena-api';
+import { arenaAuthHeaders, arenaWorkflowError, getArenaApiKey } from '@/lib/arena-api';
 
 // Match the Vercel function limit so long-running history workflow executions
 // are not cut off before the upstream responds.
@@ -55,7 +55,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
     if (!upstream.ok) {
       return NextResponse.json(
-        { success: false, error: `History workflow failed with status ${upstream.status}.` },
+        { success: false, error: arenaWorkflowError('History workflow', upstream.status) },
         { status: upstream.status }
       );
     }

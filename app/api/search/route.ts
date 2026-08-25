@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { safeJsonStringify, sanitizeDeep } from '@/lib/sanitize';
-import { arenaAuthHeaders, getArenaApiKey } from '@/lib/arena-api';
+import { arenaAuthHeaders, arenaWorkflowError, getArenaApiKey } from '@/lib/arena-api';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const SEARCH_WORKFLOW_URL = process.env.SEARCH_WORKFLOW_URL ?? '';
+const SEARCH_WORKFLOW_URL =
+  'https://agent.thearena.ai/api/workflows/970f3a69-e05e-4b68-b90c-4887a1e3cd2e/execute';
 
 /**
  * Proxies the LinkedIn entity search request to the search workflow.
@@ -13,12 +14,6 @@ const SEARCH_WORKFLOW_URL = process.env.SEARCH_WORKFLOW_URL ?? '';
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    if (!SEARCH_WORKFLOW_URL) {
-      return NextResponse.json(
-        { success: false, error: 'Search workflow is not configured (missing SEARCH_WORKFLOW_URL).' },
-        { status: 500 }
-      );
-    }
     if (!getArenaApiKey()) {
       return NextResponse.json(
         { success: false, error: 'Arena API key is not configured. Set ARENA_API_KEY in Vercel environment variables.' },
@@ -43,7 +38,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
     if (!res.ok) {
       return NextResponse.json(
-        { success: false, error: `Search workflow failed with status ${res.status}.` },
+        { success: false, error: arenaWorkflowError('Search workflow', res.status) },
         { status: 502 }
       );
     }
