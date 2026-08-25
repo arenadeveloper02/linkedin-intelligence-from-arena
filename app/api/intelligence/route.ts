@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { arenaAuthHeaders, getArenaApiKey } from '@/lib/arena-api';
 
 // Match the Vercel function limit so long-running history workflow executions
 // are not cut off before the upstream responds.
@@ -30,12 +31,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ success: false, error: 'Email is required.' }, { status: 400 });
   }
   try {
-    const apiKey = process.env.ARENA_API_KEY ?? '';
+    if (!getArenaApiKey()) {
+      return NextResponse.json(
+        { success: false, error: 'Arena API key is not configured. Set ARENA_API_KEY in Vercel environment variables.' },
+        { status: 500 }
+      );
+    }
     const upstream = await fetch(HISTORY_WORKFLOW_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+        ...arenaAuthHeaders(),
       },
       body: JSON.stringify({ email }),
       cache: 'no-store',

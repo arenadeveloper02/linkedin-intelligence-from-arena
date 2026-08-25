@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { safeJsonStringify, sanitizeDeep } from '@/lib/sanitize';
+import { arenaAuthHeaders, getArenaApiKey } from '@/lib/arena-api';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -18,12 +19,17 @@ export async function POST(request: Request): Promise<NextResponse> {
         { status: 500 }
       );
     }
-    const apiKey = process.env.ARENA_API_KEY ?? process.env.SIM_API_KEY ?? '';
+    if (!getArenaApiKey()) {
+      return NextResponse.json(
+        { success: false, error: 'Arena API key is not configured. Set ARENA_API_KEY in Vercel environment variables.' },
+        { status: 500 }
+      );
+    }
     const res = await fetch(SEARCH_WORKFLOW_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+        ...arenaAuthHeaders(),
       },
       body: safeJsonStringify(body),
       cache: 'no-store',

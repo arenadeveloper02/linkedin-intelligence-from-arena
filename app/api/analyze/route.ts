@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { recordFetchLog } from '@/lib/actions';
+import { arenaAuthHeaders, getArenaApiKey } from '@/lib/arena-api';
 
 // Increase the serverless execution window so long-running analyze workflow
 // executions complete instead of failing with a premature Vercel timeout.
@@ -47,12 +48,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
   try {
-    const apiKey = process.env.ARENA_API_KEY ?? '';
+    if (!getArenaApiKey()) {
+      return NextResponse.json(
+        { success: false, error: 'Arena API key is not configured. Set ARENA_API_KEY in Vercel environment variables.' },
+        { status: 500 }
+      );
+    }
     const upstream = await fetch(ANALYZE_WORKFLOW_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+        ...arenaAuthHeaders(),
       },
       body: JSON.stringify({
         name,
