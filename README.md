@@ -1,14 +1,14 @@
 # linkedin-intelligence
 
-Fixed the failed typecheck gate: the repo was missing tsconfig.json, so `tsc --noEmit` had no project to compile and printed its help text (exiting non-zero). Restored a standard strict Next.js 15 App Router tsconfig.json with the '@/*' path alias mapped to the project root so every existing @/components and @/lib import resolves. Also re-included the canonical zero-import app/not-found.tsx. No database code was touched: prisma generate already succeeds against the existing prisma/schema.prisma in the repo, and since that schema file was not provided in this edit context, it is intentionally left untouched (regenerating it from memory is forbidden and could drop live columns). lib/actions.ts, lib/types.ts, middleware.ts, and all components remain unchanged.
+Fix for failed typecheck: the repository was missing tsconfig.json, so `tsc` printed its help text instead of compiling (prisma generate succeeded, proving prisma/schema.prisma exists on disk even though it was not provided in the selected files — it is intentionally left untouched to avoid regenerating a live schema from memory and risking column/model drops). This edit restores a standard strict Next.js 15 tsconfig.json with the '@/*' path alias, adds next-env.d.ts so tsc --noEmit resolves Next.js ambient types before build, and includes the canonical zero-import app/not-found.tsx required for /404 prerendering. No database columns, actions, or component contracts are modified.
 
 ## Features
 
-- LinkedIn company intelligence dashboard (overview, people, companies, posts tabs)
-- Search screen with history drawer and person/company detail drawers
-- Arena email gate via middleware with access-denied screen
-- Fetch logging persisted to Postgres via Prisma
-- Strict TypeScript project configuration restored (fixes tsc --noEmit gate)
+- Restored strict TypeScript configuration (tsconfig.json) so tsc --noEmit and next build run correctly
+- Path alias '@/*' → './*' matching all existing @/lib and @/components imports
+- next-env.d.ts ambient Next.js type references for pre-build typechecking
+- Canonical zero-import app/not-found.tsx for safe /404 prerendering
+- Existing Arena email gate, middleware, Prisma client, actions, and dashboard components left untouched
 
 ## Tech Stack
 
