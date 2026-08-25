@@ -1,15 +1,14 @@
 # linkedin-intelligence
 
-LinkedIn engagement intelligence dashboard with search, analyze and inline recent-search history embedded on the main search screen.
+Fixed the failed typecheck gate: the repo was missing tsconfig.json, so `tsc --noEmit` had no project to compile and printed its help text (exiting non-zero). Restored a standard strict Next.js 15 App Router tsconfig.json with the '@/*' path alias mapped to the project root so every existing @/components and @/lib import resolves. Also re-included the canonical zero-import app/not-found.tsx. No database code was touched: prisma generate already succeeds against the existing prisma/schema.prisma in the repo, and since that schema file was not provided in this edit context, it is intentionally left untouched (regenerating it from memory is forbidden and could drop live columns). lib/actions.ts, lib/types.ts, middleware.ts, and all components remain unchanged.
 
 ## Features
 
-- Search LinkedIn companies and people
-- Analyze engagement intelligence via Arena workflow
-- Inline Recent Searches history section beneath search controls
-- One-click reload of past analyses into the full dashboard
-- Non-blocking safe parsing of large double-encoded workflow payloads
-- People, Companies, Posts and Overview tabs with drawers and modals
+- LinkedIn company intelligence dashboard (overview, people, companies, posts tabs)
+- Search screen with history drawer and person/company detail drawers
+- Arena email gate via middleware with access-denied screen
+- Fetch logging persisted to Postgres via Prisma
+- Strict TypeScript project configuration restored (fixes tsc --noEmit gate)
 
 ## Tech Stack
 
@@ -18,12 +17,6 @@ LinkedIn engagement intelligence dashboard with search, analyze and inline recen
 - Tailwind CSS v3
 - TypeScript
 - Prisma + PostgreSQL (Neon on Vercel)
-
-## Routes
-
-- `/`
-- `/access-denied`
-- `/history`
 
 ## Getting Started
 

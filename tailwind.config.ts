@@ -1,7 +1,11 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
+  content: [
+    './app/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+    './lib/**/*.{ts,tsx}',
+  ],
   theme: {
     extend: {
       fontFamily: {
@@ -22,7 +26,6 @@ const config: Config = {
         },
         brand: {
           50: '#F3F8FE',
-          100: '#E2EEFC',
           200: '#D1E3FA',
           300: '#A3C7F6',
           400: '#76ABF1',
@@ -89,6 +92,7 @@ const config: Config = {
         },
       },
       boxShadow: {
+        'ds-xsm': 'none',
         'ds-sm': '0px 1px 2px rgba(44, 45, 51, 0.08)',
         'ds-md': '0px 2px 8px rgba(44, 45, 51, 0.10)',
         'ds-lg': '0px 4px 16px rgba(44, 45, 51, 0.12)',
