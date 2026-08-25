@@ -10,7 +10,12 @@ export default function Error({
   return (
     <main className="flex min-h-[50vh] flex-col items-center justify-center px-4">
       <h1 className="text-2xl font-semibold">Something went wrong</h1>
-      <button type="button" className="mt-4 rounded px-4 py-2" onClick={() => reset()}>
+      <p className="mt-2 text-sm text-grey-500">{error.message || 'An unexpected error occurred.'}</p>
+      <button
+        type="button"
+        className="mt-4 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white transition duration-200 hover:bg-brand-700"
+        onClick={() => reset()}
+      >
         Try again
       </button>
     </main>

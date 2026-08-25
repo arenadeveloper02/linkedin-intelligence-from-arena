@@ -1,53 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { safeJsonStringify, sanitizeDeep } from '@/lib/sanitize';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
-const WORKFLOW_URL =
-  'https://agent.thearena.ai/api/workflows/970f3a69-e05e-4b68-b90c-4887a1e3cd2e/execute';
-const WORKFLOW_API_KEY = 'sk-sim-g6HxaMjNLmbQ-iqVeQnYIK3nuiyogqPs';
+const SEARCH_WORKFLOW_URL = process.env.SEARCH_WORKFLOW_URL ?? '';
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
-  let searchInput = '';
-  let isCompany = 'true';
+/**
+ * Proxies the LinkedIn entity search request to the search workflow.
+ */
+export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const body = (await request.json()) as { searchInput?: unknown; isCompany?: unknown };
-    searchInput = typeof body.searchInput === 'string' ? body.searchInput.trim() : '';
-    isCompany = typeof body.isCompany === 'string' ? body.isCompany : 'true';
-  } catch {
-    searchInput = '';
-  }
-
-  if (!searchInput) {
-    return NextResponse.json(
-      { success: false, error: 'A search input is required.' },
-      { status: 400 }
-    );
-  }
-
-  try {
-    const upstream = await fetch(WORKFLOW_URL, {
+    const body = (await request.json()) as Record<string, unknown>;
+    if (!SEARCH_WORKFLOW_URL) {
+      return NextResponse.json(
+        { success: false, error: 'Search workflow is not configured (missing SEARCH_WORKFLOW_URL).' },
+        { status: 500 }
+      );
+    }
+    const apiKey = process.env.SIM_API_KEY ?? '';
+    const res = await fetch(SEARCH_WORKFLOW_URL, {
       method: 'POST',
       headers: {
-        'X-API-Key': WORKFLOW_API_KEY,
         'Content-Type': 'application/json',
+        ...(apiKey ? { 'X-API-Key': apiKey } : {}),
       },
-      body: JSON.stringify({ searchInput, isCompany, stream: false }),
+      body: safeJsonStringify(body),
       cache: 'no-store',
     });
-
-    if (!upstream.ok) {
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+    if (!res.ok) {
       return NextResponse.json(
-        { success: false, error: `Search service responded with status ${upstream.status}.` },
+        { success: false, error: `Search workflow failed with status ${res.status}.` },
         { status: 502 }
       );
     }
-
-    const data = (await upstream.json()) as unknown;
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data: sanitizeDeep(data) });
   } catch {
-    return NextResponse.json(
-      { success: false, error: 'Failed to reach the search service. Please try again.' },
-      { status: 502 }
-    );
+    return NextResponse.json({ success: false, error: 'Search request failed.' }, { status: 500 });
   }
 }

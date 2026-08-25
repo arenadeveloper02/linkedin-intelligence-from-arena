@@ -81,7 +81,9 @@ function readDetails(record: UnknownRecord): ProfileDetails | null {
  * Deep-searches an Analyze/History workflow response (including double-JSON-encoded
  * strings and nested `output.rows[n]` structures) for a `profile_details` object and
  * extracts the canonical identifiers (profile_url, account_id, slug, name, logo,
- * tagline). Used so Refresh can rebuild the Analyze payload without empty fields.
+ * tagline). Also checks `company_details` / `company_profile` sections so history
+ * payloads without a `profile_details` wrapper still yield profile_url / account_id.
+ * Used so Refresh can rebuild the Analyze payload without empty fields.
  */
 export function extractProfileDetailsFromResponse(raw: unknown, depth = 8): ProfileDetails | null {
   if (depth <= 0) return null;
@@ -94,7 +96,14 @@ export function extractProfileDetailsFromResponse(raw: unknown, depth = 8): Prof
     return null;
   }
   if (!isRecord(decoded)) return null;
-  for (const key of ['profile_details', 'profileDetails']) {
+  for (const key of [
+    'profile_details',
+    'profileDetails',
+    'company_details',
+    'companyDetails',
+    'company_profile',
+    'companyProfile',
+  ]) {
     if (key in decoded) {
       const nested = deepDecode(decoded[key]);
       if (isRecord(nested)) {
@@ -112,4 +121,56 @@ export function extractProfileDetailsFromResponse(raw: unknown, depth = 8): Prof
     if (found) return found;
   }
   return null;
+}
+
+const PROFILE_URL_KEYS = [
+  'profile_url',
+  'profileUrl',
+  'company_profile_url',
+  'companyProfileUrl',
+  'linkedin_url',
+  'linkedinUrl',
+];
+
+const ACCOUNT_ID_KEYS = ['account_id', 'accountId'];
+
+function deepFindKeyValue(raw: unknown, keys: string[], requireUrl: boolean, depth: number): string {
+  if (depth <= 0) return '';
+  const decoded = deepDecode(raw);
+  if (Array.isArray(decoded)) {
+    for (const item of decoded) {
+      const found = deepFindKeyValue(item, keys, requireUrl, depth - 1);
+      if (found) return found;
+    }
+    return '';
+  }
+  if (!isRecord(decoded)) return '';
+  const direct = firstString(decoded, keys);
+  if (direct && (!requireUrl || isHttpUrl(direct))) return direct;
+  for (const value of Object.values(decoded)) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) continue;
+    }
+    const found = deepFindKeyValue(value, keys, requireUrl, depth - 1);
+    if (found) return found;
+  }
+  return '';
+}
+
+/**
+ * Deep-searches a stored history/analyze payload for a usable LinkedIn profile URL
+ * (`profile_url` / `company_profile_url` at any nesting level, e.g.
+ * `company_details.profile_url` or `output.company_profile.profile_url`).
+ */
+export function extractProfileUrlFromResponse(raw: unknown, depth = 8): string {
+  return deepFindKeyValue(raw, PROFILE_URL_KEYS, true, depth);
+}
+
+/**
+ * Deep-searches a stored history/analyze payload for the LinkedIn `account_id`
+ * so the Refresh payload never sends an empty account_id.
+ */
+export function extractAccountIdFromResponse(raw: unknown, depth = 8): string {
+  return deepFindKeyValue(raw, ACCOUNT_ID_KEYS, false, depth);
 }

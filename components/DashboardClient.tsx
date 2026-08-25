@@ -1,12 +1,16 @@
 "use client"
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Clock, Loader2, Users } from 'lucide-react';
 import type { DashboardData, HistoryEntry, ProfileDetails, SearchResultItem } from '@/lib/types';
 import { safeParseWorkflowResponse } from '@/lib/safe-parse';
 import { parseHistoryRows } from '@/lib/history-parse';
 import { decodeUnicodeEscapes, extractProfileDetails, formatDate, formatNumber, initialsOf } from '@/lib/utils';
-import { extractProfileDetailsFromResponse } from '@/lib/profile-details';
+import {
+  extractAccountIdFromResponse,
+  extractProfileDetailsFromResponse,
+  extractProfileUrlFromResponse,
+} from '@/lib/profile-details';
 import Topbar from '@/components/Topbar';
 import SearchScreen from '@/components/SearchScreen';
 import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
@@ -33,49 +37,145 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   const [selected, setSelected] = useState<SearchResultItem | null>(null);
   const [profileDetails, setProfileDetails] = useState<ProfileDetails | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Raw payload from the last successful Analyze/History load — final fallback
+  // source for profile_url / account_id when building the Refresh payload.
+  const [lastPayload, setLastPayload] = useState<unknown>(null);
   // Inline history state: rendered as "Recent Searches" directly beneath the search controls.
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setHistoryLoading(true);
-      setHistoryError(null);
+  // Lightweight, silent history fetch (no loading-state churn). Used by the
+  // timeout-recovery poller and by the background refresh after an analysis.
+  const fetchHistoryEntries = useCallback(async (): Promise<HistoryEntry[] | null> => {
+    try {
+      const res = await fetch('/api/intelligence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+        cache: 'no-store',
+      });
+      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
       try {
-        const res = await fetch('/api/intelligence', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim() }),
-        });
-        let json: { success: boolean; error?: string; data?: unknown } = { success: false };
-        try {
-          json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
-        } catch {
-          json = { success: false };
-        }
-        if (cancelled) return;
-        if (!res.ok || !json.success) {
-          setHistoryError(json.error ?? `History request failed with status ${res.status}.`);
-          setHistoryEntries([]);
-        } else {
-          setHistoryEntries(parseHistoryRows(json.data));
-        }
+        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
       } catch {
-        if (!cancelled) {
-          setHistoryError('Unable to load history. Please try again.');
-          setHistoryEntries([]);
-        }
-      } finally {
-        if (!cancelled) setHistoryLoading(false);
+        json = { success: false };
       }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
+      if (!res.ok || !json.success) return null;
+      return parseHistoryRows(json.data);
+    } catch {
+      return null;
+    }
   }, [email]);
+
+  // Full history load with visible loading/error states. Re-invoked on mount AND
+  // whenever the user navigates back from the dashboard so newly analyzed records
+  // appear immediately without a manual page reload.
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const res = await fetch('/api/intelligence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+        cache: 'no-store',
+      });
+      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
+      try {
+        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
+      } catch {
+        json = { success: false };
+      }
+      if (!res.ok || !json.success) {
+        setHistoryError(json.error ?? `History request failed with status ${res.status}.`);
+        setHistoryEntries([]);
+      } else {
+        setHistoryEntries(parseHistoryRows(json.data));
+      }
+    } catch {
+      setHistoryError('Unable to load history. Please try again.');
+      setHistoryEntries([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [email]);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
+
+  // Clicking a history card immediately loads that entry's stored dashboard payload.
+  // profile_url is deep-extracted from the record payload (profile_details /
+  // company_details / company_profile sections) so the "View Profile" CTA renders.
+  const openEntry = async (entry: HistoryEntry) => {
+    const entryProfileUrl = /^https?:\/\//i.test(entry.subtitle.trim()) ? entry.subtitle.trim() : '';
+    const item: SearchResultItem = {
+      id: '',
+      name: entry.title,
+      headline: entry.headline,
+      industry: entry.industry,
+      location: entry.location,
+      followersCount: entry.followersCount,
+      avatarUrl: entry.logoUrl,
+      profileUrl: entryProfileUrl,
+      slug: entry.companySlug,
+      verified: false,
+      premium: false,
+      isCompany: entry.isCompany,
+    };
+    setSelected(item);
+    setError(null);
+    setView('loading');
+    setLastPayload(entry.payload);
+    // Safe, non-blocking parse of the stored history payload (same optimized path
+    // used for live analyze responses).
+    const parsed = await safeParseWorkflowResponse(entry.payload);
+    const deepDetails = extractProfileDetailsFromResponse(entry.payload);
+    const payloadProfileUrl = extractProfileUrlFromResponse(entry.payload);
+    const payloadAccountId = extractAccountIdFromResponse(entry.payload);
+    const mergedDetails: ProfileDetails = {
+      name: deepDetails?.name || entry.title,
+      profileUrl: deepDetails?.profileUrl || payloadProfileUrl || entryProfileUrl,
+      accountId: deepDetails?.accountId || payloadAccountId || '',
+      slug: deepDetails?.slug || entry.companySlug,
+      logoUrl: deepDetails?.logoUrl || entry.logoUrl,
+      tagline: deepDetails?.tagline || entry.headline,
+    };
+    setProfileDetails(mergedDetails);
+    setSelected({
+      ...item,
+      profileUrl: mergedDetails.profileUrl || item.profileUrl,
+      id: mergedDetails.accountId || item.id,
+      slug: mergedDetails.slug || item.slug,
+    });
+    setData(parsed);
+    setView('dashboard');
+  };
+
+  // Timeout recovery: when the analyze call hits a serverless 504/500 while the
+  // backend workflow keeps running, poll the history endpoint and seamlessly load
+  // the newly generated record once it lands.
+  const recoverFromHistory = async (item: SearchResultItem): Promise<boolean> => {
+    const nameNorm = decodeUnicodeEscapes(item.name).trim().toLowerCase();
+    const slugNorm = item.slug.trim().toLowerCase();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, attempt === 0 ? 5000 : 10000));
+      const entries = await fetchHistoryEntries();
+      if (!entries) continue;
+      setHistoryEntries(entries);
+      const match = entries.find(
+        (e) =>
+          (slugNorm !== '' && e.companySlug.trim().toLowerCase() === slugNorm) ||
+          (nameNorm !== '' && decodeUnicodeEscapes(e.title).trim().toLowerCase() === nameNorm)
+      );
+      if (match) {
+        await openEntry(match);
+        return true;
+      }
+    }
+    return false;
+  };
 
   const analyze = async (item: SearchResultItem, isRefresh = false) => {
     setSelected(item);
@@ -88,12 +188,15 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     // Never send profile_url / account_id as empty strings when we already know them.
     // On Refresh, the canonical profile_details captured from the last Analyze/History
     // response is the source of truth for profile_url / account_id / slug; the selected
-    // item is only a fallback. On a fresh Analyze, the selected item takes priority.
+    // item is the next fallback, and finally the raw stored payload is deep-searched so
+    // both fields are always populated. On a fresh Analyze, the selected item takes priority.
+    const fallbackProfileUrl = isRefresh ? extractProfileUrlFromResponse(lastPayload) : '';
+    const fallbackAccountId = isRefresh ? extractAccountIdFromResponse(lastPayload) : '';
     const profileUrlToSend = isRefresh
-      ? profileDetails?.profileUrl?.trim() || item.profileUrl.trim() || ''
+      ? profileDetails?.profileUrl?.trim() || item.profileUrl.trim() || fallbackProfileUrl || ''
       : item.profileUrl.trim() || profileDetails?.profileUrl?.trim() || '';
     const accountIdToSend = isRefresh
-      ? profileDetails?.accountId?.trim() || item.id.trim() || ''
+      ? profileDetails?.accountId?.trim() || item.id.trim() || fallbackAccountId || ''
       : item.id.trim() || profileDetails?.accountId?.trim() || '';
     const slugToSend = isRefresh
       ? profileDetails?.slug?.trim() || item.slug.trim() || ''
@@ -118,9 +221,14 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         json = { success: false };
       }
       if (!res.ok || !json.success) {
-        // Gracefully handle serverless timeout / invocation failures: clear the
-        // loading state and surface a friendly, actionable message.
+        // Gracefully handle serverless timeout / invocation failures. For a fresh
+        // Analyze, automatically poll the history endpoint to load the newly
+        // generated record once the backend workflow completes.
         if (res.status === 504 || res.status === 500) {
+          if (!isRefresh) {
+            const recovered = await recoverFromHistory(item);
+            if (recovered) return;
+          }
           setError(ANALYSIS_TIMEOUT_ERROR);
         } else if (!item.isCompany) {
           setError(PERSONAL_PROFILE_ERROR);
@@ -160,6 +268,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         tagline: deepDetails?.tagline || baseDetails?.tagline || item.headline || profileDetails?.tagline || '',
       };
       setProfileDetails(mergedDetails);
+      setLastPayload(json.data);
       // Update the selected item with the resolved identifiers so a subsequent
       // Refresh sends the fully populated Analyze payload.
       setSelected({
@@ -170,7 +279,18 @@ export default function DashboardClient({ email }: DashboardClientProps) {
       });
       setData(parsed);
       setView('dashboard');
+      // Silently refresh history in the background so the new record is already
+      // visible when the user navigates back to search.
+      void fetchHistoryEntries().then((entries) => {
+        if (entries) setHistoryEntries(entries);
+      });
     } catch {
+      // Network-level timeout/abort: attempt the same history-based recovery on a
+      // fresh Analyze before surfacing an error.
+      if (!isRefresh) {
+        const recovered = await recoverFromHistory(item);
+        if (recovered) return;
+      }
       if (!item.isCompany) {
         setError(PERSONAL_PROFILE_ERROR);
       } else {
@@ -180,49 +300,6 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     } finally {
       if (isRefresh) setRefreshing(false);
     }
-  };
-
-  // Clicking a history card immediately loads that entry's stored dashboard payload.
-  const openEntry = async (entry: HistoryEntry) => {
-    const entryProfileUrl = /^https?:\/\//i.test(entry.subtitle.trim()) ? entry.subtitle.trim() : '';
-    const item: SearchResultItem = {
-      id: '',
-      name: entry.title,
-      headline: entry.headline,
-      industry: entry.industry,
-      location: entry.location,
-      followersCount: entry.followersCount,
-      avatarUrl: entry.logoUrl,
-      profileUrl: entryProfileUrl,
-      slug: entry.companySlug,
-      verified: false,
-      premium: false,
-      isCompany: entry.isCompany,
-    };
-    setSelected(item);
-    setError(null);
-    setView('loading');
-    // Safe, non-blocking parse of the stored history payload (same optimized path
-    // used for live analyze responses).
-    const parsed = await safeParseWorkflowResponse(entry.payload);
-    const deepDetails = extractProfileDetailsFromResponse(entry.payload);
-    const mergedDetails: ProfileDetails = {
-      name: deepDetails?.name || entry.title,
-      profileUrl: deepDetails?.profileUrl || entryProfileUrl,
-      accountId: deepDetails?.accountId || '',
-      slug: deepDetails?.slug || entry.companySlug,
-      logoUrl: deepDetails?.logoUrl || entry.logoUrl,
-      tagline: deepDetails?.tagline || entry.headline,
-    };
-    setProfileDetails(mergedDetails);
-    setSelected({
-      ...item,
-      profileUrl: mergedDetails.profileUrl || item.profileUrl,
-      id: mergedDetails.accountId || item.id,
-      slug: mergedDetails.slug || item.slug,
-    });
-    setData(parsed);
-    setView('dashboard');
   };
 
   if (!isValidEmail) {
@@ -249,6 +326,9 @@ export default function DashboardClient({ email }: DashboardClientProps) {
             ? () => {
                 setView('search');
                 setData(null);
+                // Re-trigger a fresh history fetch on back navigation so newly
+                // analyzed records are immediately visible.
+                void loadHistory();
               }
             : undefined
         }
@@ -303,7 +383,6 @@ export default function DashboardClient({ email }: DashboardClientProps) {
                         <img
                           src={entry.logoUrl}
                           alt={entry.title}
-                          referrerPolicy="no-referrer"
                           className="h-12 w-12 shrink-0 rounded-lg object-cover"
                         />
                       ) : (
@@ -328,12 +407,17 @@ export default function DashboardClient({ email }: DashboardClientProps) {
                               {entry.companySlug}
                             </span>
                           )}
+                          {entry.industry && (
+                            <span className="inline-flex items-center rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
+                              {entry.industry}
+                            </span>
+                          )}
                         </div>
-                        {!entry.isCompany && (entry.headline || entry.subtitle) && (
-                          <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">
-                            {decodeUnicodeEscapes(entry.headline) || entry.subtitle}
-                          </p>
-                        )}
+                        <p className="mt-0.5 line-clamp-2 break-all text-xs text-grey-600">
+                          {entry.isCompany
+                            ? entry.subtitle || '—'
+                            : decodeUnicodeEscapes(entry.headline) || entry.subtitle || '—'}
+                        </p>
                       </div>
                     </div>
                     {entry.followersCount > 0 && (
@@ -361,12 +445,14 @@ export default function DashboardClient({ email }: DashboardClientProps) {
         </main>
       </div>
       {view === 'loading' && (
-        <main className="flex min-h-[70vh] flex-col items-center justify-center px-4 text-center">
+        <main className="mx-auto flex max-w-7xl flex-col items-center justify-center px-4 py-32 text-center sm:px-6">
           <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
-          <h2 className="mt-4 text-base font-semibold text-grey-900">
-            Gathering LinkedIn Intelligence{selected ? ` for ${selected.name}` : ''}…
-          </h2>
-          <p className="mt-1 text-sm text-grey-500">This can take a moment while we analyze engagement data.</p>
+          <p className="mt-4 text-sm font-medium text-grey-700">
+            Analyzing {selected ? decodeUnicodeEscapes(selected.name) || 'profile' : 'profile'}…
+          </p>
+          <p className="mt-1 text-xs text-grey-500">
+            Gathering engagement intelligence — this can take up to a minute.
+          </p>
         </main>
       )}
       {view === 'dashboard' && data && (
