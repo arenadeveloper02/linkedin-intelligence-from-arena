@@ -55,9 +55,17 @@ export default function HistoryDrawer({ entries, loading, error, onClose, onSele
                     onClick={() => onSelect(entry)}
                     className="group flex w-full items-start gap-3 rounded-xl border border-grey-200 bg-white p-4 text-left shadow-ds-sm transition hover:border-brand-600 hover:shadow-ds-md"
                   >
-                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-xs font-semibold text-white ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}>
-                      {initialsOf(entry.title || '?')}
-                    </span>
+                    {entry.logoUrl ? (
+                      <img
+                        src={entry.logoUrl}
+                        alt=""
+                        className={`h-10 w-10 shrink-0 object-cover ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}
+                      />
+                    ) : (
+                      <span className={`flex h-10 w-10 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-xs font-semibold text-white ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}>
+                        {initialsOf(entry.title || '?')}
+                      </span>
+                    )}
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span className="block truncate text-sm font-semibold text-grey-900">{entry.title}</span>
@@ -69,11 +77,6 @@ export default function HistoryDrawer({ entries, loading, error, onClose, onSele
                           {entry.isCompany ? '🏢 Company' : '👤 Personal'}
                         </span>
                       </span>
-                      {entry.headline && (
-                        <span className="mt-0.5 block truncate text-xs text-grey-500">
-                          {entry.headline}
-                        </span>
-                      )}
                       {entry.timestamp && (
                         <span className="mt-1 flex items-center gap-1 text-[11px] text-grey-400">
                           <Clock className="h-3 w-3" />

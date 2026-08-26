@@ -104,7 +104,6 @@ export interface HistoryEntry {
   title: string;
   subtitle: string;
   timestamp: string;
-  payload: unknown;
   logoUrl: string;
   headline: string;
   industry: string;

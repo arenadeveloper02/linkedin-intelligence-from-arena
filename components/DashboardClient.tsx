@@ -1,23 +1,26 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Clock, Loader2, Users } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 import type { DashboardData, HistoryEntry, ProfileDetails, SearchResultItem } from '@/lib/types';
 import { safeParseWorkflowResponse } from '@/lib/safe-parse';
-import { parseHistoryRows } from '@/lib/history-parse';
+import {
+  detailsFromHistoryPayload,
+  parseHistoryRows,
+  toHistoryWorkflowId,
+  unwrapHistoryItemResponse,
+} from '@/lib/history-parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
-import { findNewHistoryMatch, historyFingerprint, sleep } from '@/lib/history-match';
-import { decodeUnicodeEscapes, extractProfileDetails, formatDate, formatNumber, initialsOf } from '@/lib/utils';
+import { extractProfileDetails } from '@/lib/utils';
 import {
   completeProfileDetails,
-  extractAccountIdFromResponse,
   extractProfileDetailsFromResponse,
-  extractProfileUrlFromResponse,
   resolveRefreshIdentifiers,
 } from '@/lib/profile-details';
 import Topbar from '@/components/Topbar';
 import SearchScreen from '@/components/SearchScreen';
 import AnalyzeLoading from '@/components/AnalyzeLoading';
+import HistoryCard from '@/components/HistoryCard';
 import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
 
 interface DashboardClientProps {
@@ -32,9 +35,6 @@ const PERSONAL_PROFILE_ERROR =
 const ANALYSIS_TIMEOUT_ERROR =
   'Analysis is still running in the background. Open this profile from Recent Searches in a few minutes.';
 
-const ANALYZE_POLL_MS = 5000;
-const ANALYZE_WAIT_MS = 5 * 60 * 1000;
-
 type ViewState = 'search' | 'loading' | 'dashboard';
 
 export default function DashboardClient({ email }: DashboardClientProps) {
@@ -45,6 +45,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   const [selected, setSelected] = useState<SearchResultItem | null>(null);
   const [profileDetails, setProfileDetails] = useState<ProfileDetails | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMode, setLoadingMode] = useState<'analyze' | 'history'>('analyze');
   // Raw payload from the last successful Analyze/History load — final fallback
   // source for profile_url / account_id when building the Refresh payload.
   const [lastPayload, setLastPayload] = useState<unknown>(null);
@@ -58,8 +59,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  // Lightweight, silent history fetch (no loading-state churn). Used by the
-  // timeout-recovery poller and by the background refresh after an analysis.
+  // Silent history fetch used after Analyze/Refresh completes.
   const fetchHistoryEntries = useCallback(async (): Promise<HistoryEntry[] | null> => {
     try {
       const res = await fetch('/api/intelligence', {
@@ -138,83 +138,62 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     };
     setSelected(item);
     setError(null);
+    setLoadingMode('history');
     setView('loading');
-    setLastPayload(entry.payload);
-    // Safe, non-blocking parse of the stored history payload (same optimized path
-    // used for live analyze responses).
-    const parsed = await safeParseWorkflowResponse(entry.payload);
-    const deepDetails = extractProfileDetailsFromResponse(entry.payload);
-    const payloadProfileUrl = extractProfileUrlFromResponse(entry.payload);
-    const payloadAccountId = extractAccountIdFromResponse(entry.payload);
-    const mergedDetails = completeProfileDetails({
-      name: deepDetails?.name || entry.title,
-      profileUrl: deepDetails?.profileUrl || payloadProfileUrl || entryProfileUrl,
-      accountId: deepDetails?.accountId || payloadAccountId || entry.accountId || '',
-      slug: deepDetails?.slug || entry.companySlug,
-      logoUrl: deepDetails?.logoUrl || entry.logoUrl,
-      tagline: deepDetails?.tagline || entry.headline,
-      description: deepDetails?.description || '',
-      industry: deepDetails?.industry || entry.industry,
-      location: deepDetails?.location || entry.location,
-      followersCount: deepDetails?.followersCount || entry.followersCount,
-      isCompany: deepDetails?.isCompany ?? entry.isCompany,
-    });
-    setProfileDetails(mergedDetails);
-    setSelected({
-      ...item,
-      profileUrl: mergedDetails.profileUrl || item.profileUrl,
-      id: mergedDetails.accountId || item.id,
-      slug: mergedDetails.slug || item.slug,
-    });
-    setData(parsed);
-    setView('dashboard');
+    try {
+      const res = await fetch('/api/intelligence/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: toHistoryWorkflowId(entry.id) }),
+        cache: 'no-store',
+      });
+      let json: unknown = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+      const payload = unwrapHistoryItemResponse(json);
+      const payloadRecord =
+        payload && typeof payload === 'object' ? (payload as { success?: boolean; error?: string }) : null;
+      if (!res.ok || payload == null || payloadRecord?.success === false) {
+        setError(payloadRecord?.error ?? 'Unable to load this analysis. Please try again.');
+        setView('search');
+        return;
+      }
+      const parsed = await safeParseWorkflowResponse(payload);
+      const mergedDetails = detailsFromHistoryPayload(payload, entry);
+      setLastPayload(payload);
+      setProfileDetails(mergedDetails);
+      setSelected({
+        ...item,
+        profileUrl: mergedDetails.profileUrl || item.profileUrl,
+        id: mergedDetails.accountId || item.id,
+        slug: mergedDetails.slug || item.slug,
+        avatarUrl: mergedDetails.logoUrl || item.avatarUrl,
+      });
+      setData(parsed);
+      setView('dashboard');
+    } catch {
+      setError('Unable to load this analysis. Please try again.');
+      setView('search');
+    }
   };
 
-  const waitForHistoryMatch = async (
-    item: SearchResultItem,
-    seen: Set<string>,
-    isStale: () => boolean
-  ): Promise<boolean> => {
-    const target = {
-      name: item.name,
-      slug: item.slug,
-      profileUrl: item.profileUrl,
-      accountId: item.id,
-    };
-    const seed = await fetchHistoryEntries();
-    if (seed) {
-      setHistoryEntries(seed);
-      for (const entry of seed) seen.add(historyFingerprint(entry));
-    }
-    const deadline = Date.now() + ANALYZE_WAIT_MS;
-    while (Date.now() < deadline) {
-      if (isStale()) return false;
-      await sleep(ANALYZE_POLL_MS);
-      if (isStale()) return false;
-      const entries = await fetchHistoryEntries();
-      if (!entries) continue;
-      setHistoryEntries(entries);
-      const match = findNewHistoryMatch(entries, target, seen);
-      if (match) {
-        await openEntry(match);
-        return true;
-      }
-    }
-    return false;
+  const refreshHistory = async () => {
+    const entries = await fetchHistoryEntries();
+    if (entries) setHistoryEntries(entries);
   };
 
   const analyze = async (item: SearchResultItem, isRefresh = false) => {
     const gen = (analyzeGenRef.current += 1);
     const isStale = () => analyzeGenRef.current !== gen;
-    const seen = new Set(historyEntries.map(historyFingerprint));
     const hadDashboard = isRefresh && data !== null;
     setSelected(item);
     setError(null);
     setRefreshing(isRefresh);
+    setLoadingMode('analyze');
     setView('loading');
-    // On Refresh, take account_id / profile_url from the loaded profile_details
-    // (company_profile.id + profile_url) and the stored response — never send blanks
-    // when the selected dashboard already has them.
     const identifiers = isRefresh
       ? resolveRefreshIdentifiers({
           details: profileDetailsRef.current,
@@ -231,114 +210,70 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     const profileUrlToSend = identifiers.profileUrl;
     const accountIdToSend = identifiers.accountId;
     const slugToSend = identifiers.slug;
-    let settled = false;
-    const applyPayload = async (payload: unknown) => {
-      if (settled || isStale()) return;
-      settled = true;
-      const parsed = await safeParseWorkflowResponse(payload);
-      if (isStale()) return;
-      const deepDetails = extractProfileDetailsFromResponse(payload);
-      const baseDetails = extractProfileDetails(payload);
-      const resolved = resolveRefreshIdentifiers({
-        details: deepDetails || baseDetails,
-        profileUrl: item.profileUrl,
-        accountId: item.id,
-        slug: item.slug,
-        payloads: [payload, extractIntelligencePayload(payload), lastPayloadRef.current],
-      });
-      const mergedDetails = completeProfileDetails({
-        name: deepDetails?.name || baseDetails?.name || item.name || profileDetails?.name || '',
-        profileUrl: resolved.profileUrl || profileDetails?.profileUrl || '',
-        accountId: resolved.accountId || profileDetails?.accountId || '',
-        slug: resolved.slug || item.slug.trim() || profileDetails?.slug || '',
-        logoUrl: deepDetails?.logoUrl || baseDetails?.logoUrl || item.avatarUrl || profileDetails?.logoUrl || '',
-        tagline: deepDetails?.tagline || baseDetails?.tagline || item.headline || profileDetails?.tagline || '',
-        description: deepDetails?.description || baseDetails?.description || profileDetails?.description || '',
-        industry: deepDetails?.industry || baseDetails?.industry || item.industry || profileDetails?.industry || '',
-        location: deepDetails?.location || baseDetails?.location || item.location || profileDetails?.location || '',
-        followersCount:
-          deepDetails?.followersCount ||
-          baseDetails?.followersCount ||
-          item.followersCount ||
-          profileDetails?.followersCount ||
-          0,
-        isCompany: deepDetails?.isCompany ?? baseDetails?.isCompany ?? item.isCompany,
-      });
-      setProfileDetails(mergedDetails);
-      setLastPayload(payload);
-      setSelected({
-        ...item,
-        profileUrl: mergedDetails.profileUrl || item.profileUrl,
-        id: mergedDetails.accountId || item.id,
-        slug: mergedDetails.slug || item.slug,
-      });
-      setData(parsed);
-      setView('dashboard');
-      void fetchHistoryEntries().then((entries) => {
-        if (entries) setHistoryEntries(entries);
-      });
-    };
     try {
-      const kickoff = (async () => {
-        try {
-          const res = await fetch('/api/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: item.name,
-              profile_url: profileUrlToSend,
-              account_id: accountIdToSend,
-              slug: slugToSend,
-              email: email.trim(),
-              is_company: item.isCompany ? 'true' : 'false',
-              post_limit: 10,
-            }),
-          });
-          let json: { success: boolean; pending?: boolean; error?: string; data?: unknown } = {
-            success: false,
-          };
-          try {
-            json = (await res.json()) as {
-              success: boolean;
-              pending?: boolean;
-              error?: string;
-              data?: unknown;
-            };
-          } catch {
-            json = { success: false };
-          }
-          if (isStale() || settled) return;
-          if (json.success && (json.pending || json.data === undefined)) return;
-          if (res.ok && json.success && json.data !== undefined) {
-            await applyPayload(json.data);
-            return;
-          }
-          if (res.status === 504 || res.status === 502) return;
-          settled = true;
-          if (!item.isCompany) {
-            setError(PERSONAL_PROFILE_ERROR);
-          } else {
-            setError(json.error ?? `Request failed with status ${res.status}.`);
-          }
-          setView(hadDashboard ? 'dashboard' : 'search');
-        } catch {
-          // Network / timeout: keep the loading screen and let history polling finish.
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: item.name,
+          profile_url: profileUrlToSend,
+          account_id: accountIdToSend,
+          slug: slugToSend,
+          email: email.trim(),
+          is_company: item.isCompany ? 'true' : 'false',
+          post_limit: 10,
+        }),
+      });
+      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
+      try {
+        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
+      } catch {
+        json = { success: false };
+      }
+      if (isStale()) return;
+      if (res.ok && json.success && json.data !== undefined) {
+        const parsed = await safeParseWorkflowResponse(json.data);
+        if (isStale()) return;
+        const deepDetails = extractProfileDetailsFromResponse(json.data);
+        const baseDetails = extractProfileDetails(json.data);
+        const mergedDetails = completeProfileDetails({
+          name: deepDetails?.name || baseDetails?.name || item.name,
+          profileUrl: deepDetails?.profileUrl || baseDetails?.profileUrl || item.profileUrl,
+          accountId: deepDetails?.accountId || baseDetails?.accountId || item.id,
+          slug: deepDetails?.slug || baseDetails?.slug || item.slug.trim(),
+          logoUrl: deepDetails?.logoUrl || baseDetails?.logoUrl || item.avatarUrl,
+          tagline: deepDetails?.tagline || baseDetails?.tagline || item.headline,
+          description: deepDetails?.description || baseDetails?.description || '',
+          industry: deepDetails?.industry || baseDetails?.industry || item.industry,
+          location: deepDetails?.location || baseDetails?.location || item.location,
+          followersCount:
+            deepDetails?.followersCount || baseDetails?.followersCount || item.followersCount || 0,
+          isCompany: deepDetails?.isCompany ?? baseDetails?.isCompany ?? item.isCompany,
+        });
+        setProfileDetails(mergedDetails);
+        setLastPayload(json.data);
+        setSelected({
+          ...item,
+          profileUrl: mergedDetails.profileUrl || item.profileUrl,
+          id: mergedDetails.accountId || item.id,
+          slug: mergedDetails.slug || item.slug,
+          avatarUrl: mergedDetails.logoUrl || item.avatarUrl,
+        });
+        setData(parsed);
+        setView('dashboard');
+      } else {
+        if (res.status === 504 || res.status === 502) {
+          setError(ANALYSIS_TIMEOUT_ERROR);
+        } else if (!item.isCompany) {
+          setError(PERSONAL_PROFILE_ERROR);
+        } else {
+          setError(json.error ?? `Request failed with status ${res.status}.`);
         }
-      })();
-
-      const poll = (async () => {
-        const recovered = await waitForHistoryMatch(item, seen, () => isStale() || settled);
-        if (recovered) settled = true;
-      })();
-
-      await Promise.all([kickoff, poll]);
-      if (isStale() || settled) return;
-      setError(ANALYSIS_TIMEOUT_ERROR);
-      setView(hadDashboard ? 'dashboard' : 'search');
+        setView(hadDashboard ? 'dashboard' : 'search');
+      }
+      if (!isStale()) await refreshHistory();
     } catch {
-      if (isStale() || settled) return;
-      const recovered = await waitForHistoryMatch(item, seen, () => isStale() || settled);
-      if (recovered || isStale()) return;
+      if (isStale()) return;
       if (!item.isCompany) {
         setError(PERSONAL_PROFILE_ERROR);
       } else {
@@ -424,74 +359,14 @@ export default function DashboardClient({ email }: DashboardClientProps) {
             {!historyLoading && !historyError && historyEntries.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {historyEntries.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => void openEntry(entry)}
-                    className="group flex flex-col rounded-xl border border-grey-200 bg-white p-5 text-left shadow-ds-sm transition hover:border-brand-600 hover:shadow-ds-md"
-                  >
-                    <div className="flex items-start gap-3">
-                      {entry.logoUrl ? (
-                        <img
-                          src={entry.logoUrl}
-                          alt={entry.title}
-                          className={`h-12 w-12 shrink-0 object-cover ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}
-                        />
-                      ) : (
-                        <span className={`flex h-12 w-12 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}>
-                          {initialsOf(entry.title || '?')}
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <p className="truncate text-sm font-semibold text-grey-900">
-                            {decodeUnicodeEscapes(entry.title) || 'Unknown'}
-                          </p>
-                          <span
-                            className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                              entry.isCompany ? 'bg-brand-50 text-brand-700' : 'bg-purple-50 text-purple-700'
-                            }`}
-                          >
-                            {entry.isCompany ? '🏢 Company' : '👤 Personal'}
-                          </span>
-                          {entry.companySlug && (
-                            <span className="inline-flex items-center rounded-full bg-grey-50 px-1.5 py-0.5 text-[10px] font-medium text-grey-600">
-                              {entry.companySlug}
-                            </span>
-                          )}
-                          {entry.industry && (
-                            <span className="inline-flex items-center rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
-                              {entry.industry}
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">
-                          {decodeUnicodeEscapes(entry.headline) || '—'}
-                        </p>
-                      </div>
-                    </div>
-                    {entry.followersCount > 0 && (
-                      <div className="mt-3 flex items-center gap-2 text-xs text-grey-500">
-                        <span className="flex shrink-0 items-center gap-1">
-                          <Users className="h-3.5 w-3.5" />
-                          {formatNumber(entry.followersCount)} followers
-                        </span>
-                      </div>
-                    )}
-                    {entry.timestamp && (
-                      <span className="mt-2 flex items-center gap-1 text-[11px] text-grey-400">
-                        <Clock className="h-3 w-3" />
-                        Analyzed {formatDate(entry.timestamp) || entry.timestamp}
-                      </span>
-                    )}
-                  </button>
+                  <HistoryCard key={entry.id} entry={entry} onSelect={(item) => void openEntry(item)} />
                 ))}
               </div>
             )}
           </section>
         </main>
       </div>
-      {view === 'loading' && <AnalyzeLoading name={selected?.name} />}
+      {view === 'loading' && <AnalyzeLoading name={selected?.name} variant={loadingMode} />}
       {view === 'dashboard' && data && (
         <LinkedInIntelligenceDashboard
           data={data}

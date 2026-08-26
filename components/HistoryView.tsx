@@ -1,8 +1,8 @@
 "use client"
 
-import { Clock, Loader2, Users } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 import type { HistoryEntry } from '@/lib/types';
-import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf } from '@/lib/utils';
+import HistoryCard from '@/components/HistoryCard';
 
 interface HistoryViewProps {
   entries: HistoryEntry[];
@@ -52,67 +52,7 @@ export default function HistoryView({ entries, loading, error, onSelect }: Histo
           </p>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {entries.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => onSelect(entry)}
-                className="group flex flex-col rounded-xl border border-grey-200 bg-white p-5 text-left shadow-ds-sm transition hover:border-brand-600 hover:shadow-ds-md"
-              >
-                <div className="flex items-start gap-3">
-                      {entry.logoUrl ? (
-                        <img
-                          src={entry.logoUrl}
-                          alt={entry.title}
-                          className={`h-12 w-12 shrink-0 object-cover ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}
-                        />
-                      ) : (
-                        <span className={`flex h-12 w-12 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}>
-                      {initialsOf(entry.title || '?')}
-                    </span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="truncate text-sm font-semibold text-grey-900">
-                        {decodeUnicodeEscapes(entry.title) || 'Unknown'}
-                      </p>
-                      <span
-                        className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                          entry.isCompany ? 'bg-brand-50 text-brand-700' : 'bg-purple-50 text-purple-700'
-                        }`}
-                      >
-                        {entry.isCompany ? '🏢 Company' : '👤 Personal'}
-                      </span>
-                      {entry.companySlug && (
-                        <span className="inline-flex items-center rounded-full bg-grey-50 px-1.5 py-0.5 text-[10px] font-medium text-grey-600">
-                          {entry.companySlug}
-                        </span>
-                      )}
-                      {entry.industry && (
-                        <span className="inline-flex items-center rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
-                          {entry.industry}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">
-                      {decodeUnicodeEscapes(entry.headline) || '—'}
-                    </p>
-                  </div>
-                </div>
-                {entry.followersCount > 0 && (
-                  <div className="mt-3 flex items-center gap-2 text-xs text-grey-500">
-                    <span className="flex shrink-0 items-center gap-1">
-                      <Users className="h-3.5 w-3.5" />
-                      {formatNumber(entry.followersCount)} followers
-                    </span>
-                  </div>
-                )}
-                {entry.timestamp && (
-                  <span className="mt-2 flex items-center gap-1 text-[11px] text-grey-400">
-                    <Clock className="h-3 w-3" />
-                    Analyzed {formatDate(entry.timestamp) || entry.timestamp}
-                  </span>
-                )}
-              </button>
+              <HistoryCard key={entry.id} entry={entry} onSelect={onSelect} />
             ))}
           </div>
         </div>

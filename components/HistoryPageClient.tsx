@@ -2,22 +2,24 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, Loader2, Users } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 import type { DashboardData, HistoryEntry, ProfileDetails } from '@/lib/types';
-import { parseWorkflowResponse } from '@/lib/parse';
 import { extractIntelligencePayload } from '@/lib/search-parse';
-import { parseHistoryRows } from '@/lib/history-parse';
-import { findNewHistoryMatch, historyFingerprint, sleep } from '@/lib/history-match';
+import {
+  detailsFromHistoryPayload,
+  parseHistoryRows,
+  toHistoryWorkflowId,
+  unwrapHistoryItemResponse,
+} from '@/lib/history-parse';
+import { safeParseWorkflowResponse } from '@/lib/safe-parse';
 import {
   completeProfileDetails,
-  extractAccountIdFromResponse,
   extractProfileDetailsFromResponse,
-  extractProfileUrlFromResponse,
   resolveRefreshIdentifiers,
 } from '@/lib/profile-details';
-import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf } from '@/lib/utils';
 import Topbar from '@/components/Topbar';
 import AnalyzeLoading from '@/components/AnalyzeLoading';
+import HistoryCard from '@/components/HistoryCard';
 import LinkedInIntelligenceDashboard from '@/components/LinkedInIntelligenceDashboard';
 
 interface HistoryPageClientProps {
@@ -35,7 +37,9 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
   // the opened history payload so the "View Profile" CTA renders and Refresh
   // never sends empty identifier fields.
   const [profileDetails, setProfileDetails] = useState<ProfileDetails | null>(null);
+  const [lastPayload, setLastPayload] = useState<unknown>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [opening, setOpening] = useState(false);
 
   // History load extracted into a callback so it can be re-triggered after
   // Analyze/Refresh. Opening a card and going back reuses the cached list.
@@ -88,56 +92,56 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
     router.push(trimmed ? `/?emailId=${encodeURIComponent(trimmed)}` : '/');
   };
 
-  const openEntry = (entry: HistoryEntry) => {
+  const openEntry = async (entry: HistoryEntry) => {
     setSelectedEntry(entry);
-    const payload = extractIntelligencePayload(entry.payload);
-    let parsed = parseWorkflowResponse(payload);
-    if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
-      parsed = parseWorkflowResponse(entry.payload);
+    setOpening(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/intelligence/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: toHistoryWorkflowId(entry.id) }),
+        cache: 'no-store',
+      });
+      let json: unknown = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+      const payload = unwrapHistoryItemResponse(json);
+      const payloadRecord =
+        payload && typeof payload === 'object' ? (payload as { success?: boolean; error?: string }) : null;
+      if (!res.ok || payload == null || payloadRecord?.success === false) {
+        setError(payloadRecord?.error ?? 'Unable to load this analysis. Please try again.');
+        setSelectedEntry(null);
+        return;
+      }
+      const parsed = await safeParseWorkflowResponse(payload);
+      setLastPayload(payload);
+      setProfileDetails(detailsFromHistoryPayload(payload, entry));
+      setData(parsed);
+    } catch {
+      setError('Unable to load this analysis. Please try again.');
+      setSelectedEntry(null);
+    } finally {
+      setOpening(false);
     }
-    // Restore the "View Profile" CTA: deep-extract profile_url / account_id from
-    // the stored history payload (company_details.profile_url,
-    // output.company_profile.profile_url, profile_details, etc.) and keep them
-    // in active dashboard state.
-    const entryProfileUrl = /^https?:\/\//i.test(entry.subtitle.trim()) ? entry.subtitle.trim() : '';
-    const deepDetails = extractProfileDetailsFromResponse(entry.payload);
-    const payloadProfileUrl = extractProfileUrlFromResponse(entry.payload);
-    const payloadAccountId = extractAccountIdFromResponse(entry.payload);
-    setProfileDetails(
-      completeProfileDetails({
-        name: deepDetails?.name || entry.title,
-        profileUrl: deepDetails?.profileUrl || payloadProfileUrl || entryProfileUrl,
-        accountId: deepDetails?.accountId || payloadAccountId || entry.accountId || '',
-        slug: deepDetails?.slug || entry.companySlug,
-        logoUrl: deepDetails?.logoUrl || entry.logoUrl,
-        tagline: deepDetails?.tagline || entry.headline,
-        description: deepDetails?.description || '',
-        industry: deepDetails?.industry || entry.industry,
-        location: deepDetails?.location || entry.location,
-        followersCount: deepDetails?.followersCount || entry.followersCount,
-        isCompany: deepDetails?.isCompany ?? entry.isCompany,
-      })
-    );
-    setData(parsed);
   };
 
   const refresh = async () => {
     if (!selectedEntry || refreshing) return;
     setRefreshing(true);
-    const seen = new Set(entries.map(historyFingerprint));
-    const target = {
-      name: selectedEntry.title,
-      slug: selectedEntry.companySlug,
-      profileUrl: /^https?:\/\//i.test(selectedEntry.subtitle.trim()) ? selectedEntry.subtitle.trim() : '',
-      accountId: selectedEntry.accountId,
-    };
     try {
+      const entryProfileUrl = /^https?:\/\//i.test(selectedEntry.subtitle.trim())
+        ? selectedEntry.subtitle.trim()
+        : '';
       const identifiers = resolveRefreshIdentifiers({
         details: profileDetails,
-        profileUrl: target.profileUrl,
+        profileUrl: entryProfileUrl,
         accountId: selectedEntry.accountId,
         slug: selectedEntry.companySlug,
-        payloads: [selectedEntry.payload, extractIntelligencePayload(selectedEntry.payload)],
+        payloads: [lastPayload, extractIntelligencePayload(lastPayload)],
       });
       const profileUrlToSend = identifiers.profileUrl;
       const accountIdToSend = identifiers.accountId;
@@ -155,61 +159,34 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
           post_limit: 10,
         }),
       });
-      let json: { success: boolean; pending?: boolean; error?: string; data?: unknown } = { success: false };
+      let json: { success: boolean; error?: string; data?: unknown } = { success: false };
       try {
-        json = (await res.json()) as {
-          success: boolean;
-          pending?: boolean;
-          error?: string;
-          data?: unknown;
-        };
+        json = (await res.json()) as { success: boolean; error?: string; data?: unknown };
       } catch {
         json = { success: false };
       }
-      if (res.ok && json.success && json.data !== undefined && !json.pending) {
-        const payload = extractIntelligencePayload(json.data);
-        let parsed = parseWorkflowResponse(payload);
-        if (!parsed.company && parsed.posts.length === 0 && parsed.people.length === 0) {
-          parsed = parseWorkflowResponse(json.data);
-        }
+      if (res.ok && json.success && json.data !== undefined) {
+        const parsed = await safeParseWorkflowResponse(json.data);
         const deepDetails = extractProfileDetailsFromResponse(json.data);
-        const resolved = resolveRefreshIdentifiers({
-          details: deepDetails,
-          profileUrl: profileUrlToSend,
-          accountId: accountIdToSend,
-          slug: slugToSend,
-          payloads: [json.data, payload],
-        });
-        setProfileDetails((prev) =>
+        setLastPayload(json.data);
+        setProfileDetails(
           completeProfileDetails({
-            name: deepDetails?.name || prev?.name || selectedEntry.title,
-            profileUrl: resolved.profileUrl || prev?.profileUrl || profileUrlToSend,
-            accountId: resolved.accountId || prev?.accountId || accountIdToSend,
-            slug: resolved.slug || prev?.slug || slugToSend,
-            logoUrl: deepDetails?.logoUrl || prev?.logoUrl || selectedEntry.logoUrl,
-            tagline: deepDetails?.tagline || prev?.tagline || selectedEntry.headline,
-            description: deepDetails?.description || prev?.description || '',
-            industry: deepDetails?.industry || prev?.industry || selectedEntry.industry,
-            location: deepDetails?.location || prev?.location || selectedEntry.location,
-            followersCount: deepDetails?.followersCount || prev?.followersCount || selectedEntry.followersCount,
-            isCompany: deepDetails?.isCompany ?? prev?.isCompany ?? selectedEntry.isCompany,
+            name: deepDetails?.name || selectedEntry.title,
+            profileUrl: deepDetails?.profileUrl || profileUrlToSend,
+            accountId: deepDetails?.accountId || accountIdToSend,
+            slug: deepDetails?.slug || slugToSend,
+            logoUrl: deepDetails?.logoUrl || '',
+            tagline: deepDetails?.tagline || '',
+            description: deepDetails?.description || '',
+            industry: deepDetails?.industry || '',
+            location: deepDetails?.location || '',
+            followersCount: deepDetails?.followersCount || 0,
+            isCompany: deepDetails?.isCompany ?? selectedEntry.isCompany,
           })
         );
         setData(parsed);
-        void loadHistory({ silent: true });
-        return;
       }
-      const deadline = Date.now() + 5 * 60 * 1000;
-      while (Date.now() < deadline) {
-        await sleep(5000);
-        const latest = await loadHistory({ silent: true });
-        if (!latest) continue;
-        const match = findNewHistoryMatch(latest, target, seen);
-        if (match) {
-          openEntry(match);
-          return;
-        }
-      }
+      void loadHistory({ silent: true });
     } catch {
       // Keep the currently loaded dashboard data if the refresh fails.
     } finally {
@@ -224,23 +201,27 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
   return (
     <div className="min-h-screen bg-grey-50">
       <Topbar
-        loading={refreshing}
+        loading={refreshing || opening}
         subtitle={data ? 'Signal tracking: people, companies & post engagement' : undefined}
         onBack={
-          refreshing
+          refreshing || opening
             ? undefined
             : data
               ? () => {
                   setData(null);
                   setSelectedEntry(null);
                   setProfileDetails(null);
+                  setLastPayload(null);
                 }
               : backToSearch
         }
-        onRefresh={!refreshing && data && selectedEntry ? () => void refresh() : undefined}
+        onRefresh={!refreshing && !opening && data && selectedEntry ? () => void refresh() : undefined}
       />
-      {refreshing ? (
-        <AnalyzeLoading name={selectedEntry?.title} />
+      {opening || refreshing ? (
+        <AnalyzeLoading
+          name={selectedEntry?.title}
+          variant={opening ? 'history' : 'analyze'}
+        />
       ) : data ? (
         <LinkedInIntelligenceDashboard data={data} profileUrl={selectedProfileUrl} profileDetails={profileDetails} />
       ) : (
@@ -261,77 +242,17 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
             </div>
           )}
           {!loading && error && (
-            <div className="rounded-xl border border-error-300 bg-error-50 px-4 py-3 text-sm text-error-700">{error}</div>
+            <div className="mb-4 rounded-xl border border-error-300 bg-error-50 px-4 py-3 text-sm text-error-700">{error}</div>
           )}
-          {!loading && !error && entries.length === 0 && (
+          {!loading && entries.length === 0 && !error && (
             <div className="rounded-xl border border-dashed border-grey-300 bg-white p-10 text-center text-sm text-grey-500">
               No history found yet. Run an analysis to see it here.
             </div>
           )}
-          {!loading && !error && entries.length > 0 && (
+          {!loading && entries.length > 0 && (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {entries.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => openEntry(entry)}
-                  className="group flex flex-col rounded-xl border border-grey-200 bg-white p-5 text-left shadow-ds-sm transition hover:border-brand-600 hover:shadow-ds-md"
-                >
-                  <div className="flex items-start gap-3">
-                    {entry.logoUrl ? (
-                      <img
-                        src={entry.logoUrl}
-                        alt={entry.title}
-                        className={`h-12 w-12 shrink-0 object-cover ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}
-                      />
-                    ) : (
-                      <span className={`flex h-12 w-12 shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-purple-600 text-sm font-semibold text-white ${entry.isCompany ? 'rounded-lg' : 'rounded-full'}`}>
-                        {initialsOf(entry.title || '?')}
-                      </span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <p className="truncate text-sm font-semibold text-grey-900">
-                          {decodeUnicodeEscapes(entry.title) || 'Unknown'}
-                        </p>
-                        <span
-                          className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                            entry.isCompany ? 'bg-brand-50 text-brand-700' : 'bg-purple-50 text-purple-700'
-                          }`}
-                        >
-                          {entry.isCompany ? '🏢 Company' : '👤 Personal'}
-                        </span>
-                        {entry.companySlug && (
-                          <span className="inline-flex items-center rounded-full bg-grey-50 px-1.5 py-0.5 text-[10px] font-medium text-grey-600">
-                            {entry.companySlug}
-                          </span>
-                        )}
-                        {entry.industry && (
-                          <span className="inline-flex items-center rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
-                            {entry.industry}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">
-                        {decodeUnicodeEscapes(entry.headline) || '—'}
-                      </p>
-                    </div>
-                  </div>
-                  {entry.followersCount > 0 && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-grey-500">
-                      <span className="flex shrink-0 items-center gap-1">
-                        <Users className="h-3.5 w-3.5" />
-                        {formatNumber(entry.followersCount)} followers
-                      </span>
-                    </div>
-                  )}
-                  {entry.timestamp && (
-                    <span className="mt-2 flex items-center gap-1 text-[11px] text-grey-400">
-                      <Clock className="h-3 w-3" />
-                      Analyzed {formatDate(entry.timestamp) || entry.timestamp}
-                    </span>
-                  )}
-                </button>
+                <HistoryCard key={entry.id} entry={entry} onSelect={(item) => void openEntry(item)} />
               ))}
             </div>
           )}
