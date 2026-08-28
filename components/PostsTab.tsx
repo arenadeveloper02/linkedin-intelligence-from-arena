@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, ExternalLink, MessageSquare, Repeat2, ThumbsUp } from 'lucide-react';
 import type { EngagementRecord, Person, PostItem, SeniorityLevel } from '@/lib/types';
-import { formatDate, formatNumber, initialsOf, isCSuiteOrFounder, peopleForPost, postEngagementTotal, resolvePostUrl } from '@/lib/utils';
+import { formatDate, formatNumber, initialsOf, peopleForPost, postEngagementTotal, resolvePostUrl } from '@/lib/utils';
 
 interface PostsTabProps {
   posts: PostItem[];
@@ -97,10 +97,7 @@ export default function PostsTab({ posts, people, engagements = [], authorName, 
 
       <div className="space-y-4">
         {filtered.map((post) => {
-          const engagers = engagersByPost.get(post.id) ?? [];
           const engagerCount = postEngagementTotal(post);
-          const dmCount = engagers.filter((p) => p.isDecisionMaker).length;
-          const cSuiteCount = engagers.filter((p) => isCSuiteOrFounder(p)).length;
           const viewUrl = resolvePostUrl(post.shareUrl, '', post.activityKey);
           return (
             <div
@@ -126,12 +123,6 @@ export default function PostsTab({ posts, people, engagements = [], authorName, 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
                   {formatNumber(engagerCount)} engagers
-                </span>
-                <span className="rounded-full bg-success-50 px-2.5 py-1 text-xs font-medium text-success-700">
-                  {formatNumber(dmCount)} decision makers
-                </span>
-                <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
-                  {formatNumber(cSuiteCount)} C-Suite / Founders
                 </span>
                 <span className="flex items-center gap-1 rounded-full bg-grey-50 px-2.5 py-1 text-xs font-medium text-grey-700">
                   <ThumbsUp className="h-3 w-3" />
