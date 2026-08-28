@@ -47,6 +47,7 @@ export interface Person {
 export interface PostItem {
   id: string;
   activityKey: string;
+  socialId: string;
   text: string;
   parsedDatetime: string;
   reactionCounter: number;
@@ -68,10 +69,13 @@ export interface DashboardData {
   posts: PostItem[];
   people: Person[];
   engagements: EngagementRecord[];
+  companies: CompanyAggregate[];
 }
 
 export interface CompanyAggregate {
   name: string;
+  companyId: string;
+  companyUrl: string;
   peopleCount: number;
   decisionMakerCount: number;
   totalEngagements: number;

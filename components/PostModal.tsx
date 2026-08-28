@@ -1,21 +1,28 @@
 "use client"
 
+import { useMemo } from 'react';
 import { ExternalLink, MessageSquare, Repeat2, ThumbsUp, X } from 'lucide-react';
-import type { Person, PostItem } from '@/lib/types';
-import { formatDate, formatNumber, initialsOf, resolvePostUrl } from '@/lib/utils';
-import { ReactionBadge, SeniorityBadge } from '@/components/Widgets';
+import type { EngagementRecord, Person, PostItem } from '@/lib/types';
+import { formatDate, formatNumber, initialsOf, peopleForPost, reactionForPost, resolvePostUrl } from '@/lib/utils';
+import { CompanyBadge, DecisionMakerBadge, ReactionBadge, SeniorityBadge } from '@/components/Widgets';
 
 interface PostModalProps {
   post: PostItem;
-  engagers: Person[];
+  people: Person[];
+  engagements?: EngagementRecord[];
   onClose: () => void;
 }
 
-export default function PostModal({ post, engagers, onClose }: PostModalProps) {
-  const reactionFor = (person: Person): string =>
-    person.interactions.find((i) => i.postKey === post.activityKey)?.reactionType ?? 'LIKE';
-
+export default function PostModal({ post, people, engagements = [], onClose }: PostModalProps) {
   const shareUrl = resolvePostUrl(post.shareUrl, '', post.activityKey);
+  const sortedEngagers = useMemo(() => {
+    return [...peopleForPost(post, people, engagements)].sort((a, b) => {
+      if (a.isDecisionMaker !== b.isDecisionMaker) return a.isDecisionMaker ? -1 : 1;
+      if (a.seniority === 'C-Level' && b.seniority !== 'C-Level') return -1;
+      if (b.seniority === 'C-Level' && a.seniority !== 'C-Level') return 1;
+      return a.fullName.localeCompare(b.fullName);
+    });
+  }, [post, people, engagements]);
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
@@ -60,15 +67,22 @@ export default function PostModal({ post, engagers, onClose }: PostModalProps) {
             )}
           </div>
 
-          <h3 className="mt-6 text-sm font-semibold text-grey-900">Engagers ({engagers.length})</h3>
-          {engagers.length === 0 ? (
-            <p className="mt-2 text-xs text-grey-500">No engager records mapped to this post.</p>
+          <h3 className="mt-6 text-sm font-semibold text-grey-900">
+            Engager people ({sortedEngagers.length})
+          </h3>
+          {sortedEngagers.length === 0 ? (
+            <p className="mt-2 text-xs text-grey-500">No people from this analysis reacted to this post.</p>
           ) : (
             <ul className="mt-3 divide-y divide-grey-100">
-              {engagers.map((person) => (
+              {sortedEngagers.map((person) => (
                 <li key={person.slug} className="flex items-center gap-3 py-3">
                   {person.avatarUrl ? (
-                    <img src={person.avatarUrl} alt={person.fullName} className="h-9 w-9 rounded-full object-cover" />
+                    <img
+                      src={person.avatarUrl}
+                      alt={person.fullName}
+                      referrerPolicy="no-referrer"
+                      className="h-9 w-9 rounded-full object-cover"
+                    />
                   ) : (
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">
                       {initialsOf(person.fullName)}
@@ -80,9 +94,13 @@ export default function PostModal({ post, engagers, onClose }: PostModalProps) {
                       {person.title || person.headline || '—'}
                       {person.companyName ? ` · ${person.companyName}` : ''}
                     </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-1">
+                      <SeniorityBadge level={person.seniority} />
+                      <CompanyBadge isInternal={person.isInternal} />
+                      {person.isDecisionMaker && <DecisionMakerBadge />}
+                    </span>
                   </span>
-                  <SeniorityBadge level={person.seniority} />
-                  <ReactionBadge type={reactionFor(person)} />
+                  <ReactionBadge type={reactionForPost(person, post, engagements)} />
                 </li>
               ))}
             </ul>

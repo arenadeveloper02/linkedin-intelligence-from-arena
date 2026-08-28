@@ -9,7 +9,7 @@ const poppins = Poppins({ subsets: ['latin'], weight: ['400', '500', '600', '700
 
 export const metadata: Metadata = {
   title: 'LinkedIn Intelligence',
-  description: 'Search, select and analyze LinkedIn engagement — people, companies and post activity.',
+  description: 'Search, select and analyze LinkedIn engagement — people and post activity.',
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {

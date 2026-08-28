@@ -202,7 +202,7 @@ export default function HistoryPageClient({ email }: HistoryPageClientProps) {
     <div className="min-h-screen bg-grey-50">
       <Topbar
         loading={refreshing || opening}
-        subtitle={data ? 'Signal tracking: people, companies & post engagement' : undefined}
+        subtitle={data ? 'Signal tracking: people & post engagement' : undefined}
         onBack={
           refreshing || opening
             ? undefined

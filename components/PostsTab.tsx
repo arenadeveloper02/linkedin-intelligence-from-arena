@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, ExternalLink, MessageSquare, Repeat2, ThumbsUp } from 'lucide-react';
-import type { Person, PostItem, SeniorityLevel } from '@/lib/types';
-import { formatDate, formatNumber, initialsOf, resolvePostUrl } from '@/lib/utils';
+import type { EngagementRecord, Person, PostItem, SeniorityLevel } from '@/lib/types';
+import { formatDate, formatNumber, initialsOf, isCSuiteOrFounder, peopleForPost, postEngagementTotal, resolvePostUrl } from '@/lib/utils';
 
 interface PostsTabProps {
   posts: PostItem[];
   people: Person[];
+  engagements?: EngagementRecord[];
   authorName: string;
   onSelectPost: (id: string) => void;
 }
@@ -19,9 +20,8 @@ function toTime(value: string): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
-export default function PostsTab({ posts, people, authorName, onSelectPost }: PostsTabProps) {
+export default function PostsTab({ posts, people, engagements = [], authorName, onSelectPost }: PostsTabProps) {
   const [seniority, setSeniority] = useState<SeniorityLevel | ''>('');
-  const [company, setCompany] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [mostEngaged, setMostEngaged] = useState(false);
@@ -29,24 +29,15 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
   const engagersByPost = useMemo(() => {
     const map = new Map<string, Person[]>();
     for (const post of posts) {
-      map.set(
-        post.id,
-        people.filter((p) => post.engagerSlugs.includes(p.slug))
-      );
+      map.set(post.id, peopleForPost(post, people, engagements));
     }
     return map;
-  }, [posts, people]);
-
-  const companyOptions = useMemo(
-    () => Array.from(new Set(people.map((p) => p.companyName.trim()).filter(Boolean))).sort(),
-    [people]
-  );
+  }, [posts, people, engagements]);
 
   const filtered = useMemo(() => {
     const list = posts.filter((post) => {
       const engagers = engagersByPost.get(post.id) ?? [];
       if (seniority && !engagers.some((p) => p.seniority === seniority)) return false;
-      if (company && !engagers.some((p) => p.companyName === company)) return false;
       const time = toTime(post.parsedDatetime);
       if (dateFrom && time > 0 && time < toTime(dateFrom)) return false;
       if (dateTo && time > 0 && time > toTime(`${dateTo}T23:59:59`)) return false;
@@ -54,21 +45,25 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
     });
     return [...list].sort((a, b) => {
       if (mostEngaged) {
-        return (
-          (engagersByPost.get(b.id)?.length ?? 0) - (engagersByPost.get(a.id)?.length ?? 0) ||
-          b.reactionCounter - a.reactionCounter
-        );
+        return postEngagementTotal(b) - postEngagementTotal(a) || b.reactionCounter - a.reactionCounter;
       }
       return toTime(b.parsedDatetime) - toTime(a.parsedDatetime);
     });
-  }, [posts, engagersByPost, seniority, company, dateFrom, dateTo, mostEngaged]);
+  }, [posts, engagersByPost, seniority, dateFrom, dateTo, mostEngaged]);
 
   const selectClass =
     'rounded-lg border border-grey-200 bg-white px-3 py-2 text-xs text-grey-700 focus:border-brand-600 focus:outline-none';
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-grey-200 bg-white p-4 shadow-ds-sm">
+      {posts.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-grey-300 bg-white p-10 text-center shadow-ds-sm">
+          <p className="text-sm font-medium text-grey-900">This profile doesn't have any posts</p>
+          <p className="mt-1 text-xs text-grey-500">There are no LinkedIn posts to show for this profile.</p>
+        </div>
+      ) : (
+        <>
+          <div className="rounded-xl border border-grey-200 bg-white p-4 shadow-ds-sm">
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={seniority}
@@ -79,14 +74,6 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
             {SENIORITY_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option === 'Unknown' ? 'Other' : option}
-              </option>
-            ))}
-          </select>
-          <select value={company} onChange={(e) => setCompany(e.target.value)} className={selectClass}>
-            <option value="">All companies</option>
-            {companyOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
               </option>
             ))}
           </select>
@@ -111,8 +98,9 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
       <div className="space-y-4">
         {filtered.map((post) => {
           const engagers = engagersByPost.get(post.id) ?? [];
+          const engagerCount = postEngagementTotal(post);
           const dmCount = engagers.filter((p) => p.isDecisionMaker).length;
-          const cSuiteCount = engagers.filter((p) => p.seniority === 'C-Level').length;
+          const cSuiteCount = engagers.filter((p) => isCSuiteOrFounder(p)).length;
           const viewUrl = resolvePostUrl(post.shareUrl, '', post.activityKey);
           return (
             <div
@@ -137,13 +125,13 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
               <p className="mt-3 line-clamp-3 text-sm text-grey-700">{post.text || 'No content available.'}</p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
-                  {engagers.length} engagers
+                  {formatNumber(engagerCount)} engagers
                 </span>
                 <span className="rounded-full bg-success-50 px-2.5 py-1 text-xs font-medium text-success-700">
-                  {dmCount} decision makers
+                  {formatNumber(dmCount)} decision makers
                 </span>
                 <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
-                  {cSuiteCount} C-Suite
+                  {formatNumber(cSuiteCount)} C-Suite / Founders
                 </span>
                 <span className="flex items-center gap-1 rounded-full bg-grey-50 px-2.5 py-1 text-xs font-medium text-grey-700">
                   <ThumbsUp className="h-3 w-3" />
@@ -179,6 +167,8 @@ export default function PostsTab({ posts, people, authorName, onSelectPost }: Po
         <div className="rounded-xl border border-dashed border-grey-300 bg-white p-10 text-center text-sm text-grey-500">
           No posts match the current filters.
         </div>
+      )}
+        </>
       )}
     </div>
   );

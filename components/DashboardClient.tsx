@@ -303,7 +303,7 @@ export default function DashboardClient({ email }: DashboardClientProps) {
     <div className="min-h-screen bg-grey-50">
       <Topbar
         loading={view === 'loading' || refreshing}
-        subtitle={view === 'dashboard' ? 'Signal tracking: people, companies & post engagement' : undefined}
+        subtitle={view === 'dashboard' ? 'Signal tracking: people & post engagement' : undefined}
         onBack={
           view === 'dashboard'
             ? () => {

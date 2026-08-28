@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { DashboardData, ProfileDetails, TabKey } from '@/lib/types';
-import { buildCompanyAggregates, decodeUnicodeEscapes, initialsOf } from '@/lib/utils';
+import { decodeUnicodeEscapes, initialsOf } from '@/lib/utils';
 import OverviewTab from '@/components/OverviewTab';
 import PeopleTab from '@/components/PeopleTab';
 import CompaniesTab from '@/components/CompaniesTab';
@@ -11,6 +11,7 @@ import PostsTab from '@/components/PostsTab';
 import PersonDrawer from '@/components/PersonDrawer';
 import CompanyDrawer from '@/components/CompanyDrawer';
 import PostModal from '@/components/PostModal';
+import { ExpandableText } from '@/components/Widgets';
 
 interface LinkedInIntelligenceDashboardProps {
   data: DashboardData;
@@ -32,18 +33,13 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
 
-  const companyAggregates = useMemo(() => buildCompanyAggregates(data.people), [data]);
-
+  const selectedCompany = selectedCompanyName
+    ? data.companies.find((company) => company.name === selectedCompanyName) ?? null
+    : null;
   const selectedPerson = selectedPersonSlug
     ? data.people.find((p) => p.slug === selectedPersonSlug) ?? null
     : null;
-  const selectedCompany = selectedCompanyName
-    ? companyAggregates.find((c) => c.name === selectedCompanyName) ?? null
-    : null;
   const selectedPost = selectedPostId ? data.posts.find((p) => p.id === selectedPostId) ?? null : null;
-  const postEngagers = selectedPost
-    ? data.people.filter((p) => selectedPost.engagerSlugs.includes(p.slug))
-    : [];
 
   const openCompanyFromOverview = (name: string) => {
     setTab('companies');
@@ -67,7 +63,7 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
     <>
       {showHeader && (
         <div className="border-b border-grey-200 bg-white">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-start gap-4 px-4 py-5 sm:px-6">
             {showLogo ? (
               <img
                 src={headerLogo}
@@ -84,7 +80,7 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
             <div className="min-w-0 flex-1">
               <h2 className="truncate text-lg font-semibold text-grey-900">{displayName}</h2>
               {headerDescription ? (
-                <p className="mt-0.5 line-clamp-2 text-sm text-grey-600">{headerDescription}</p>
+                <ExpandableText text={headerDescription} className="mt-0.5 text-sm text-grey-600" />
               ) : null}
             </div>
             {entityUrl && (
@@ -92,7 +88,7 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
                 href={entityUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white transition duration-200 hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-600/30"
+                className="inline-flex h-10 shrink-0 items-center gap-2 self-start rounded-xl bg-brand-600 px-4 text-sm font-medium text-white transition duration-200 hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-600/30"
               >
                 View Profile
                 <ExternalLink className="h-4 w-4" />
@@ -121,30 +117,41 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
       </div>
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
         {tab === 'overview' ? (
-          <OverviewTab data={data} companies={companyAggregates} onSelectCompany={openCompanyFromOverview} />
+          <OverviewTab
+            data={data}
+            companies={data.companies}
+            onSelectCompany={openCompanyFromOverview}
+          />
         ) : tab === 'people' ? (
           <PeopleTab
             people={data.people}
-            companyName={data.company?.name ?? ''}
             onSelectPerson={setSelectedPersonSlug}
           />
         ) : tab === 'companies' ? (
-          <CompaniesTab companies={companyAggregates} onSelectCompany={setSelectedCompanyName} />
+          <CompaniesTab companies={data.companies} onSelectCompany={setSelectedCompanyName} />
         ) : (
           <PostsTab
             posts={data.posts}
             people={data.people}
+            engagements={data.engagements}
             authorName={postsAuthor}
             onSelectPost={setSelectedPostId}
           />
         )}
       </main>
       {selectedPerson && (
-        <PersonDrawer person={selectedPerson} posts={data.posts} onClose={() => setSelectedPersonSlug(null)} />
+        <PersonDrawer
+          person={selectedPerson}
+          posts={data.posts}
+          engagements={data.engagements}
+          onClose={() => setSelectedPersonSlug(null)}
+        />
       )}
       {selectedCompany && (
         <CompanyDrawer
           company={selectedCompany}
+          posts={data.posts}
+          engagements={data.engagements}
           onClose={() => setSelectedCompanyName(null)}
           onSelectPerson={(slug) => {
             setSelectedCompanyName(null);
@@ -153,7 +160,12 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
         />
       )}
       {selectedPost && (
-        <PostModal post={selectedPost} engagers={postEngagers} onClose={() => setSelectedPostId(null)} />
+        <PostModal
+          post={selectedPost}
+          people={data.people}
+          engagements={data.engagements}
+          onClose={() => setSelectedPostId(null)}
+        />
       )}
     </>
   );

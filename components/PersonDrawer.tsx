@@ -1,19 +1,28 @@
 "use client"
 
+import { useMemo } from 'react';
 import { ExternalLink, Users, X } from 'lucide-react';
-import type { Person, PostItem } from '@/lib/types';
-import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf, resolvePostUrl } from '@/lib/utils';
+import type { EngagementRecord, Person, PostItem } from '@/lib/types';
+import { decodeUnicodeEscapes, formatDate, formatNumber, initialsOf, listPersonReactedPosts } from '@/lib/utils';
 import { CompanyBadge, DecisionMakerBadge, ReactionBadge, SeniorityBadge } from '@/components/Widgets';
 
 interface PersonDrawerProps {
   person: Person;
   posts: PostItem[];
+  engagements?: EngagementRecord[];
   onClose: () => void;
 }
 
-export default function PersonDrawer({ person, posts, onClose }: PersonDrawerProps) {
-  const findPost = (postKey: string): PostItem | null =>
-    posts.find((p) => p.activityKey === postKey) ?? null;
+export default function PersonDrawer({ person, posts, engagements = [], onClose }: PersonDrawerProps) {
+  const reactedPosts = useMemo(
+    () =>
+      listPersonReactedPosts(person, posts, engagements).sort((a, b) => {
+        const aTime = Date.parse(a.datetime) || 0;
+        const bTime = Date.parse(b.datetime) || 0;
+        return bTime - aTime;
+      }),
+    [person, posts, engagements]
+  );
 
   return (
     <div className="fixed inset-0 z-40">
@@ -96,40 +105,36 @@ export default function PersonDrawer({ person, posts, onClose }: PersonDrawerPro
           </dl>
 
           <h4 className="mt-4 text-sm font-semibold text-grey-900">
-            Post interaction history ({person.interactions.length})
+            Posts liked or reacted ({reactedPosts.length})
           </h4>
-          {person.interactions.length === 0 ? (
-            <p className="mt-2 text-xs text-grey-500">No recorded interactions for this person.</p>
+          {reactedPosts.length === 0 ? (
+            <p className="mt-2 text-xs text-grey-500">No liked or reacted post links found for this person.</p>
           ) : (
             <ul className="mt-2 space-y-3">
-              {person.interactions.map((interaction, index) => {
-                const post = findPost(interaction.postKey);
-                const url = resolvePostUrl(interaction.postUrl, post?.shareUrl ?? '', interaction.postKey);
-                return (
-                  <li key={`${interaction.postKey}-${index}`} className="rounded-lg border border-grey-200 p-3">
-                    <div className="flex items-center justify-between">
-                      <ReactionBadge type={interaction.reactionType} />
-                      {post && post.parsedDatetime && (
-                        <span className="text-[11px] text-grey-500">{formatDate(post.parsedDatetime)}</span>
-                      )}
-                    </div>
-                    <p className="mt-2 line-clamp-3 text-xs text-grey-600">
-                      {decodeUnicodeEscapes(interaction.postSnippet || post?.text || 'Post content unavailable.')}
-                    </p>
-                    {url && (
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-600 transition duration-200 hover:text-brand-700"
-                      >
-                        View post
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
+              {reactedPosts.map((item) => (
+                <li key={item.url} className="rounded-lg border border-grey-200 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <ReactionBadge type={item.reactionType} />
+                    {item.datetime && (
+                      <span className="text-[11px] text-grey-500">{formatDate(item.datetime)}</span>
                     )}
-                  </li>
-                );
-              })}
+                  </div>
+                  {item.snippet && (
+                    <p className="mt-2 line-clamp-3 text-xs text-grey-600">
+                      {decodeUnicodeEscapes(item.snippet)}
+                    </p>
+                  )}
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex max-w-full items-start gap-1 break-all text-xs font-medium text-brand-600 transition duration-200 hover:text-brand-700"
+                  >
+                    {item.url}
+                    <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" />
+                  </a>
+                </li>
+              ))}
             </ul>
           )}
         </div>

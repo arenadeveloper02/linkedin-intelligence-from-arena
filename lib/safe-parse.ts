@@ -2,7 +2,7 @@ import type { DashboardData } from './types';
 import { parseWorkflowResponse } from './parse';
 import { extractIntelligencePayload } from './search-parse';
 
-const EMPTY_DASHBOARD: DashboardData = { company: null, posts: [], people: [], engagements: [] };
+const EMPTY_DASHBOARD: DashboardData = { company: null, posts: [], people: [], engagements: [], companies: [] };
 
 /**
  * Safely parses a workflow response (analyze workflow
@@ -29,7 +29,7 @@ export async function safeParseWorkflowResponse(raw: unknown): Promise<Dashboard
     try {
       return parseWorkflowResponse(raw);
     } catch {
-      return { ...EMPTY_DASHBOARD, posts: [], people: [], engagements: [] };
+      return { ...EMPTY_DASHBOARD, posts: [], people: [], engagements: [], companies: [] };
     }
   }
 }

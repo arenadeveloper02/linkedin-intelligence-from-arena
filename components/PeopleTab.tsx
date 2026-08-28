@@ -4,11 +4,10 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import type { Person, SeniorityLevel } from '@/lib/types';
 import { formatNumber, initialsOf } from '@/lib/utils';
-import { CompanyBadge, DecisionMakerBadge, SeniorityBadge } from '@/components/Widgets';
+import { DecisionMakerBadge, SeniorityBadge } from '@/components/Widgets';
 
 interface PeopleTabProps {
   people: Person[];
-  companyName: string;
   onSelectPerson: (slug: string) => void;
 }
 
@@ -16,19 +15,6 @@ interface PersonCardProps {
   person: Person;
   maxEngagement: number;
   onClick: () => void;
-}
-
-function normalizeCompany(value: string): string {
-  return value.trim().toLowerCase().replace(/[.,'\u2019]/g, '').replace(/\s+/g, ' ');
-}
-
-function sameCompany(a: string, b: string): boolean {
-  const x = normalizeCompany(a);
-  const y = normalizeCompany(b);
-  if (!x || !y) return false;
-  if (x === y) return true;
-  if (x.length >= 4 && y.length >= 4) return x.includes(y) || y.includes(x);
-  return false;
 }
 
 function isHttpUrl(value: string): boolean {
@@ -70,7 +56,6 @@ function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <SeniorityBadge level={person.seniority} />
-        <CompanyBadge isInternal={person.isInternal} />
         {person.isDecisionMaker && <DecisionMakerBadge />}
         {person.companyName && (
           <span className="max-w-[160px] truncate rounded-full border border-grey-200 px-2 py-0.5 text-[11px] font-medium text-grey-600">
@@ -107,13 +92,10 @@ const BUCKETS: { level: SeniorityLevel; label: string }[] = [
   { level: 'Unknown', label: 'Other' },
 ];
 
-export default function PeopleTab({ people, companyName, onSelectPerson }: PeopleTabProps) {
+export default function PeopleTab({ people, onSelectPerson }: PeopleTabProps) {
   const [search, setSearch] = useState('');
   const [seniorities, setSeniorities] = useState<SeniorityLevel[]>([]);
-  const [country, setCountry] = useState('');
-  const [degree, setDegree] = useState('');
   const [decisionOnly, setDecisionOnly] = useState(false);
-  const [hideInternal, setHideInternal] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const uniquePeople = useMemo(() => {
@@ -127,15 +109,6 @@ export default function PeopleTab({ people, companyName, onSelectPerson }: Peopl
     return list;
   }, [people]);
 
-  const countries = useMemo(
-    () => Array.from(new Set(uniquePeople.map((p) => (p.country || '').trim()).filter(Boolean))).sort(),
-    [uniquePeople]
-  );
-  const degrees = useMemo(
-    () => Array.from(new Set(uniquePeople.map((p) => (p.connectionDegree || '').trim()).filter(Boolean))).sort(),
-    [uniquePeople]
-  );
-
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return uniquePeople.filter((p) => {
@@ -144,22 +117,16 @@ export default function PeopleTab({ people, companyName, onSelectPerson }: Peopl
         if (!haystack.includes(query)) return false;
       }
       if (seniorities.length > 0 && !seniorities.includes(p.seniority)) return false;
-      if (country && (p.country || '').trim() !== country) return false;
-      if (degree && (p.connectionDegree || '').trim() !== degree) return false;
       if (decisionOnly && !p.isDecisionMaker) return false;
-      if (hideInternal && (p.isInternal || sameCompany(p.companyName, companyName))) return false;
       return true;
     });
-  }, [uniquePeople, search, seniorities, country, degree, decisionOnly, hideInternal, companyName]);
+  }, [uniquePeople, search, seniorities, decisionOnly]);
 
   const maxEngagement = useMemo(() => filtered.reduce((max, p) => Math.max(max, p.engagementCount), 0), [filtered]);
 
   const toggleSeniority = (level: SeniorityLevel) => {
     setSeniorities((prev) => (prev.includes(level) ? prev.filter((l) => l !== level) : [...prev, level]));
   };
-
-  const selectClass =
-    'rounded-lg border border-grey-200 bg-white px-3 py-2 text-xs text-grey-700 focus:border-brand-600 focus:outline-none';
 
   return (
     <div className="space-y-6">
@@ -174,22 +141,6 @@ export default function PeopleTab({ people, companyName, onSelectPerson }: Peopl
               className="w-full rounded-lg border border-grey-200 py-2 pl-9 pr-3 text-sm text-grey-900 placeholder:text-grey-400 focus:border-brand-600 focus:outline-none"
             />
           </div>
-          <select value={country} onChange={(e) => setCountry(e.target.value)} className={selectClass}>
-            <option value="">All countries</option>
-            {countries.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <select value={degree} onChange={(e) => setDegree(e.target.value)} className={selectClass}>
-            <option value="">Any degree</option>
-            {degrees.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <div className="flex flex-wrap gap-2">
@@ -216,15 +167,6 @@ export default function PeopleTab({ people, companyName, onSelectPerson }: Peopl
               className="h-4 w-4 rounded border-grey-300 accent-brand-600"
             />
             Decision makers only
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-grey-700">
-            <input
-              type="checkbox"
-              checked={hideInternal}
-              onChange={(e) => setHideInternal(e.target.checked)}
-              className="h-4 w-4 rounded border-grey-300 accent-brand-600"
-            />
-            {companyName ? `Hide ${companyName} employees` : 'Hide internal employees'}
           </label>
           <span className="ml-auto text-xs text-grey-500">
             {filtered.length} of {uniquePeople.length} people

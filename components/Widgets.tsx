@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react';
+"use client"
+
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { DistributionItem, SeniorityLevel } from '@/lib/types';
 import { formatNumber, reactionEmoji } from '@/lib/utils';
 
@@ -127,17 +129,68 @@ export function DashboardSkeleton() {
   return (
     <div className="animate-pulse space-y-6">
       <div className="h-28 rounded-xl bg-grey-100" />
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, index) => (
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, index) => (
           <div key={index} className="h-24 rounded-xl bg-grey-100" />
         ))}
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {Array.from({ length: 4 }).map((_, index) => (
+      <div className="grid gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, index) => (
           <div key={index} className="h-56 rounded-xl bg-grey-100" />
         ))}
       </div>
-      <div className="h-72 rounded-xl bg-grey-100" />
+    </div>
+  );
+}
+
+interface ExpandableTextProps {
+  text: string;
+  className?: string;
+}
+
+export function ExpandableText({ text, className }: ExpandableTextProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+
+  useLayoutEffect(() => {
+    setExpanded(false);
+    setOverflows(false);
+  }, [text]);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      if (expanded) return;
+      setOverflows(el.scrollHeight > el.clientHeight + 1);
+    };
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [text, expanded]);
+
+  if (!text) return null;
+
+  return (
+    <div>
+      <p ref={ref} className={`${className ?? ''} ${expanded ? 'whitespace-pre-line' : 'line-clamp-2'}`}>
+        {text}
+      </p>
+      {overflows ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((open) => !open)}
+          className="mt-1 text-xs font-medium text-brand-600 transition duration-200 hover:text-brand-700"
+        >
+          {expanded ? 'View less' : 'View more'}
+        </button>
+      ) : null}
     </div>
   );
 }
