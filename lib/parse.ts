@@ -1075,7 +1075,7 @@ export function parseWorkflowResponse(raw: unknown): DashboardData {
         name: summary.name,
         companyId: summary.companyId,
         companyUrl: summary.companyUrl,
-        peopleCount: summary.peopleCount || companyPeople.length,
+        peopleCount: companyPeople.length,
         decisionMakerCount: companyPeople.filter((person) => person.isDecisionMaker).length,
         totalEngagements: companyPeople.reduce((sum, person) => sum + person.engagementCount, 0),
         seniorityCounts,
