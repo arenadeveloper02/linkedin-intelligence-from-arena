@@ -33,7 +33,10 @@ export default function OverviewTab({ data, companies, onSelectCompany }: Overvi
     return buildDistribution(source);
   }, [data]);
 
-  const seniorityMix = useMemo(() => buildDistribution(data.people.map((p) => p.seniority)), [data]);
+  const seniorityMix = useMemo(
+    () => buildDistribution((data.peopleCompanyProfiles ?? []).map((p) => p.seniority)),
+    [data]
+  );
   const employeeMix = useMemo<DistributionItem[]>(() => {
     const internal = data.people.filter((p) => p.isInternal).length;
     const external = data.people.length - internal;
