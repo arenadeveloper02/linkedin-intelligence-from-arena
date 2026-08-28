@@ -68,6 +68,7 @@ export interface DashboardData {
   company: CompanyProfile | null;
   posts: PostItem[];
   people: Person[];
+  peopleCompanyProfiles?: Person[];
   engagements: EngagementRecord[];
   companies: CompanyAggregate[];
 }

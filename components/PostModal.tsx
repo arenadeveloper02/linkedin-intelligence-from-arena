@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { ExternalLink, MessageSquare, Repeat2, ThumbsUp, X } from 'lucide-react';
 import type { EngagementRecord, Person, PostItem } from '@/lib/types';
 import { formatDate, formatNumber, initialsOf, peopleForPost, reactionForPost, resolvePostUrl } from '@/lib/utils';
-import { CompanyBadge, DecisionMakerBadge, ReactionBadge, SeniorityBadge } from '@/components/Widgets';
+import { ReactionBadge } from '@/components/Widgets';
 
 interface PostModalProps {
   post: PostItem;
@@ -91,13 +91,7 @@ export default function PostModal({ post, people, engagements = [], onClose }: P
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-grey-900">{person.fullName}</span>
                     <span className="block truncate text-xs text-grey-500">
-                      {person.title || person.headline || '—'}
-                      {person.companyName ? ` · ${person.companyName}` : ''}
-                    </span>
-                    <span className="mt-1 flex flex-wrap items-center gap-1">
-                      <SeniorityBadge level={person.seniority} />
-                      <CompanyBadge isInternal={person.isInternal} />
-                      {person.isDecisionMaker && <DecisionMakerBadge />}
+                      {person.title || '—'}
                     </span>
                   </span>
                   <ReactionBadge type={reactionForPost(person, post, engagements)} />

@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
-import type { Person, SeniorityLevel } from '@/lib/types';
-import { formatNumber, initialsOf } from '@/lib/utils';
+import type { EngagementRecord, Person, PostItem, SeniorityLevel } from '@/lib/types';
+import { formatNumber, initialsOf, isCSuiteOrFounder, listPersonReactedPosts } from '@/lib/utils';
 import { DecisionMakerBadge, SeniorityBadge } from '@/components/Widgets';
 
 interface PeopleTabProps {
   people: Person[];
+  posts: PostItem[];
+  engagements: EngagementRecord[];
   onSelectPerson: (slug: string) => void;
 }
 
@@ -51,7 +53,7 @@ function PersonCard({ person, maxEngagement, onClick }: PersonCardProps) {
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-grey-900">{person.fullName || 'Unknown person'}</p>
-          <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">{person.headline || person.title || '—'}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-grey-600">{person.title || person.headline || '—'}</p>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -92,7 +94,7 @@ const BUCKETS: { level: SeniorityLevel; label: string }[] = [
   { level: 'Unknown', label: 'Other' },
 ];
 
-export default function PeopleTab({ people, onSelectPerson }: PeopleTabProps) {
+export default function PeopleTab({ people, posts, engagements, onSelectPerson }: PeopleTabProps) {
   const [search, setSearch] = useState('');
   const [seniorities, setSeniorities] = useState<SeniorityLevel[]>([]);
   const [decisionOnly, setDecisionOnly] = useState(false);
@@ -109,18 +111,28 @@ export default function PeopleTab({ people, onSelectPerson }: PeopleTabProps) {
     return list;
   }, [people]);
 
+  const peopleWithPostCounts = useMemo(
+    () =>
+      uniquePeople.map((person) => {
+        const postCount = listPersonReactedPosts(person, posts, engagements).length;
+        return postCount === person.engagementCount ? person : { ...person, engagementCount: postCount };
+      }),
+    [uniquePeople, posts, engagements]
+  );
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return uniquePeople.filter((p) => {
+    return peopleWithPostCounts.filter((p) => {
       if (query) {
         const haystack = `${p.fullName} ${p.title} ${p.headline} ${p.companyName}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       if (seniorities.length > 0 && !seniorities.includes(p.seniority)) return false;
-      if (decisionOnly && !p.isDecisionMaker) return false;
+      const isLeadershipRole = p.seniority === 'C-Level' || p.seniority === 'Director' || isCSuiteOrFounder(p);
+      if (decisionOnly && !p.isDecisionMaker && !isLeadershipRole) return false;
       return true;
     });
-  }, [uniquePeople, search, seniorities, decisionOnly]);
+  }, [peopleWithPostCounts, search, seniorities, decisionOnly]);
 
   const maxEngagement = useMemo(() => filtered.reduce((max, p) => Math.max(max, p.engagementCount), 0), [filtered]);
 
@@ -169,7 +181,7 @@ export default function PeopleTab({ people, onSelectPerson }: PeopleTabProps) {
             Decision makers only
           </label>
           <span className="ml-auto text-xs text-grey-500">
-            {filtered.length} of {uniquePeople.length} people
+            {filtered.length} of {peopleWithPostCounts.length} people
           </span>
         </div>
       </div>

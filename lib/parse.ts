@@ -16,6 +16,7 @@ interface ParseAccumulator {
   company: CompanyProfile | null;
   companiesByKey: Map<string, CompanySummary>;
   companyProfilePeopleBySlug: Map<string, Person>;
+  peopleCompanyProfilesBySlug: Map<string, Person>;
   profileImagesByKey: Map<string, string>;
   postsById: Map<string, PostItem>;
   peopleBySlug: Map<string, Person>;
@@ -456,7 +457,34 @@ function rowFromHeadered(cells: unknown[], map: Partial<Record<keyof RawPersonRo
   };
 }
 
-function rowFromRecord(record: UnknownRecord): RawPersonRow {
+function currentCompanyRecord(record: UnknownRecord): UnknownRecord | null {
+  const decodedCurrentCompany = deepDecode(record.current_company ?? record.currentCompany);
+  const currentCompanyValue = Array.isArray(decodedCurrentCompany)
+    ? decodedCurrentCompany.find((value) => isRecord(value))
+    : decodedCurrentCompany;
+  return isRecord(currentCompanyValue) ? currentCompanyValue : null;
+}
+
+function currentCompanyPosition(currentCompany: UnknownRecord | null): string {
+  if (!currentCompany) return '';
+  return pickString(currentCompany, [
+    'position',
+    'positon',
+    'current_position',
+    'currentPosition',
+    'job_title',
+    'jobTitle',
+    'title',
+  ]);
+}
+
+function hasCurrentCompanyAndPosition(record: UnknownRecord): boolean {
+  const currentCompany = currentCompanyRecord(record);
+  const companyId = currentCompany ? pickString(currentCompany, ['company_id', 'companyId']) : '';
+  return Boolean(currentCompany && companyId.trim() && currentCompanyPosition(currentCompany).trim());
+}
+
+function rowFromRecord(record: UnknownRecord, fromCompanyProfiles = false): RawPersonRow {
   const str = (field: keyof RawPersonRow): string => pickString(record, SYNONYM_MAP.get(field) ?? []);
   const num = (field: keyof RawPersonRow): number => pickNumber(record, SYNONYM_MAP.get(field) ?? []);
   const decodedCurrentCompany = deepDecode(record.current_company ?? record.currentCompany);
@@ -478,6 +506,7 @@ function rowFromRecord(record: UnknownRecord): RawPersonRow {
         'url',
       ])
     : '';
+  const position = currentCompanyPosition(currentCompany);
   return {
     urn: str('urn'),
     personId: str('personId'),
@@ -486,7 +515,7 @@ function rowFromRecord(record: UnknownRecord): RawPersonRow {
     lastName: str('lastName'),
     linkedinUrl: str('linkedinUrl'),
     headline: str('headline'),
-    title: str('title'),
+    title: fromCompanyProfiles ? position || str('title') : str('title'),
     seniorityRaw: str('seniorityRaw'),
     decisionMakerRaw: str('decisionMakerRaw'),
     companyName: str('companyName') || currentCompanyName,
@@ -720,7 +749,8 @@ function ingestPersonRow(
   acc: ParseAccumulator,
   engagerSets: Map<string, Set<string>>,
   row: RawPersonRow,
-  fromCompanyProfiles = false
+  fromCompanyProfiles = false,
+  includeInPeopleTab = false
 ): boolean {
   const fullName = (row.fullName || `${row.firstName} ${row.lastName}`).trim();
   if (!row.urn.trim() && !row.linkedinUrl.trim() && !row.personId.trim() && !fullName) return false;
@@ -789,7 +819,12 @@ function ingestPersonRow(
     if (!person.isInternal && computeIsInternal(row, companyName || person.companyName)) person.isInternal = true;
   }
   for (const key of keys) peopleBySlug.set(key, person);
-  if (fromCompanyProfiles) return true;
+  if (fromCompanyProfiles) {
+    if (includeInPeopleTab) {
+      for (const key of keys) acc.peopleCompanyProfilesBySlug.set(key, person);
+    }
+    return true;
+  }
 
   const postUrl = isHttpUrl(row.postUrl)
     ? row.postUrl.trim()
@@ -865,7 +900,9 @@ function ingestPeopleValue(
       headerMapFromValue(decoded.headers) ??
       headerMapFromValue(decoded.columns);
     const inner = deepDecode(
-      decoded.values ?? decoded.rows ?? decoded.items ?? decoded.data ?? decoded.engagementRecords
+      fromCompanyProfiles
+        ? decoded.people ?? decoded.values ?? decoded.rows ?? decoded.items ?? decoded.data
+        : decoded.values ?? decoded.rows ?? decoded.items ?? decoded.data ?? decoded.engagementRecords
     );
     if (Array.isArray(inner)) items = inner;
   }
@@ -886,8 +923,9 @@ function ingestPeopleValue(
       continue;
     }
     if (isRecord(rowValue)) {
-      const row = rowFromRecord(rowValue);
-      if (ingestPersonRow(acc, engagerSets, row, fromCompanyProfiles)) ingested += 1;
+      const row = rowFromRecord(rowValue, fromCompanyProfiles);
+      const includeInPeopleTab = fromCompanyProfiles && hasCurrentCompanyAndPosition(rowValue);
+      if (ingestPersonRow(acc, engagerSets, row, fromCompanyProfiles, includeInPeopleTab)) ingested += 1;
     }
   }
   return ingested;
@@ -926,9 +964,13 @@ const PEOPLE_KEY_PATTERN = /(profiledata|usersprofile|people|person|engager|enga
 const POST_KEY_PATTERN = /(recentlistposts|^posts$|postslist|listposts)/;
 
 function isCompanyProfilePersonRecord(record: UnknownRecord): boolean {
-  const currentCompany = deepDecode(record.current_company ?? record.currentCompany);
+  const currentCompanyValue = deepDecode(record.current_company ?? record.currentCompany);
   const name = pickString(record, ['name', 'full_name', 'fullName', 'person_name', 'personName']);
-  return Boolean(name && (isRecord(currentCompany) || typeof currentCompany === 'string'));
+  return Boolean(
+    name &&
+      (currentCompanyRecord(record) ||
+        (typeof currentCompanyValue === 'string' && currentCompanyValue.trim()))
+  );
 }
 
 function walk(
@@ -985,7 +1027,9 @@ function walk(
     }
     if (PEOPLE_KEY_PATTERN.test(normalized)) {
       const ingested = ingestPeopleValue(inner, acc, engagerSets, inCompanyProfiles);
-      if (ingested > 0) continue;
+      // people_company_profiles can contain both `people` and `companies`;
+      // keep walking this wrapper so company summaries are still ingested.
+      if (ingested > 0 && normalized !== 'peoplecompanyprofiles') continue;
     }
     if (typeof inner === 'string') continue;
     walk(inner, acc, engagerSets, depth + 1, inCompanyProfiles);
@@ -997,6 +1041,7 @@ export function parseWorkflowResponse(raw: unknown): DashboardData {
     company: null,
     companiesByKey: new Map<string, CompanySummary>(),
     companyProfilePeopleBySlug: new Map<string, Person>(),
+    peopleCompanyProfilesBySlug: new Map<string, Person>(),
     profileImagesByKey: new Map<string, string>(),
     postsById: new Map<string, PostItem>(),
     peopleBySlug: new Map<string, Person>(),
@@ -1034,6 +1079,20 @@ export function parseWorkflowResponse(raw: unknown): DashboardData {
     seenPeople.add(person);
     uniquePeople.push(person);
   }
+  const peopleCompanyProfiles = Array.from(new Set(acc.peopleCompanyProfilesBySlug.values())).map((person) => {
+    const matchedEngager = uniquePeople.find(
+      (candidate) =>
+        candidate.slug === person.slug ||
+        (candidate.linkedinUrl && person.linkedinUrl && candidate.linkedinUrl === person.linkedinUrl) ||
+        (candidate.fullName && person.fullName && normalizeName(candidate.fullName) === normalizeName(person.fullName))
+    );
+    if (!matchedEngager) return person;
+    return {
+      ...person,
+      interactions: matchedEngager.interactions,
+      engagementCount: matchedEngager.engagementCount,
+    };
+  });
   const companies: CompanyAggregate[] = Array.from(acc.companiesByKey.values())
     .map((summary) => {
       const companyPeople = Array.from(new Set(acc.companyProfilePeopleBySlug.values()))
@@ -1092,6 +1151,7 @@ export function parseWorkflowResponse(raw: unknown): DashboardData {
     company: acc.company,
     posts,
     people: uniquePeople,
+    peopleCompanyProfiles,
     engagements: acc.engagements,
     companies,
   };

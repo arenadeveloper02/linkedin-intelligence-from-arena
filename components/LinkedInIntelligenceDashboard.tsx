@@ -32,12 +32,15 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
   const [selectedCompanyName, setSelectedCompanyName] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
+  const peopleForPeopleTab = data.peopleCompanyProfiles ?? data.people;
 
   const selectedCompany = selectedCompanyName
     ? data.companies.find((company) => company.name === selectedCompanyName) ?? null
     : null;
   const selectedPerson = selectedPersonSlug
-    ? data.people.find((p) => p.slug === selectedPersonSlug) ?? null
+    ? peopleForPeopleTab.find((p) => p.slug === selectedPersonSlug) ??
+      data.people.find((p) => p.slug === selectedPersonSlug) ??
+      null
     : null;
   const selectedPost = selectedPostId ? data.posts.find((p) => p.id === selectedPostId) ?? null : null;
 
@@ -124,7 +127,9 @@ export default function LinkedInIntelligenceDashboard({ data, profileUrl, profil
           />
         ) : tab === 'people' ? (
           <PeopleTab
-            people={data.people}
+            people={peopleForPeopleTab}
+            posts={data.posts}
+            engagements={data.engagements}
             onSelectPerson={setSelectedPersonSlug}
           />
         ) : tab === 'companies' ? (
