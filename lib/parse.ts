@@ -775,7 +775,9 @@ function ingestPersonRow(
       headline: row.headline.trim(),
       title: row.title.trim(),
       seniorityRaw: row.seniorityRaw.trim(),
-      seniority: classifySeniority(row.seniorityRaw, row.title, row.headline),
+      seniority: fromCompanyProfiles
+        ? classifySeniority('', row.title, '')
+        : classifySeniority(row.seniorityRaw, row.title, row.headline),
       isDecisionMaker: parseBoolean(row.decisionMakerRaw),
       companyName,
       companyUrl: isHttpUrl(row.companyUrl) ? row.companyUrl.trim() : '',
@@ -812,7 +814,9 @@ function ingestPersonRow(
     if (person.followersCount === 0 && row.followersCount > 0) person.followersCount = row.followersCount;
     if (person.connectionsCount === 0 && row.connectionsCount > 0) person.connectionsCount = row.connectionsCount;
     if (person.seniority === 'Unknown') {
-      const reclassified = classifySeniority(row.seniorityRaw, row.title, row.headline);
+      const reclassified = fromCompanyProfiles
+        ? classifySeniority('', row.title, '')
+        : classifySeniority(row.seniorityRaw, row.title, row.headline);
       if (reclassified !== 'Unknown') person.seniority = reclassified;
     }
     if (!person.isDecisionMaker && parseBoolean(row.decisionMakerRaw)) person.isDecisionMaker = true;

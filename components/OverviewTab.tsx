@@ -16,9 +16,12 @@ export default function OverviewTab({ data, companies, onSelectCompany }: Overvi
   const stats = useMemo(() => {
     const totalFromPeople = data.people.reduce((sum, p) => sum + p.engagementCount, 0);
     const totalEngagements = totalFromPeople > 0 ? totalFromPeople : data.engagements.length;
-    const uniquePeople = data.people.length;
-    const decisionMakers = data.people.filter((p) => p.isDecisionMaker).length;
-    const cSuite = data.people.filter((p) => p.seniority === 'C-Level').length;
+    const companyProfilePeople = data.peopleCompanyProfiles ?? [];
+    const uniquePeople = companyProfilePeople.length;
+    const decisionMakers = companyProfilePeople.filter(
+      (p) => p.isDecisionMaker || p.seniority === 'C-Level' || p.seniority === 'Director'
+    ).length;
+    const cSuite = companyProfilePeople.filter((p) => p.seniority === 'C-Level').length;
     const commentRecords = data.engagements.filter((e) => e.engagementType.toLowerCase().includes('comment')).length;
     const comments = commentRecords > 0 ? commentRecords : data.posts.reduce((sum, p) => sum + p.commentCounter, 0);
     return { totalEngagements, uniquePeople, decisionMakers, cSuite, comments };
